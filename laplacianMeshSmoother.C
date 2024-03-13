@@ -74,102 +74,41 @@ using namespace Foam;
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-// Function to get point IDs belonging to a patch
-List<label> getPatchPointIDs(const polyMesh &mesh, word patch_name) {
-  
-  label patchID = mesh.boundaryMesh().findPatchID(patch_name);
-
-  List<int> patchPointIDs;
-
-  // Access patch faces
-  const polyPatch &patch = mesh.boundaryMesh()[patchID];
-  Info << patch_name << " : " << patchID << endl;
-
-  // Iterate over faces of the patch
-  forAll(patch, faceID) {
-    const face &meshFace = patch[faceID];
-
-    Info << faceID;
-
-    // Access the points of the face
-    const List<int> &facePoints = meshFace;
-
-    Info << " " << facePoints << endl;
-
-    // Append point IDs to the list
-    patchPointIDs.append(facePoints);
-  }
-
-  labelList result;
-  Info << "patchPointIDs min/max:" << min(patchPointIDs) << " "
-       << max(patchPointIDs) << endl;
-
-  // Remove duplicates
-  result = Foam::uniqueSort(patchPointIDs);
-  /* Foam::sort(patchPointIDs); */
-  Info << "result min/max:" << min(result) << " " << max(result) << endl;
-  Info << "result: " << result << endl;
-
-  return result;
-}
-
 // Function to project a point onto a sphere
 point projectPointOntoSphere(const vector& point, double radius) {
-    // Calculate the magnitude of the point vector
-    double magnitude = mag(point);
+  // Calculate the magnitude of the point vector
+  double magnitude = mag(point);
 
-    // Normalize the point vector to get the direction
-    vector direction = point / magnitude;
+  // Normalize the point vector to get the direction
+  vector direction = point / magnitude;
 
-    // Scale the direction vector by the radius to get the coordinates of the projected point
-    vector projectedPoint = direction * radius;
+  // Scale the direction vector by the radius to get the coordinates of the projected point
+  vector projectedPoint = direction * radius;
 
-    return projectedPoint;
+  return projectedPoint;
 }
-
-
-// A class to holde the constrained point set:
-// Input: pointSetName, constraintType, constraintValue
-// Members: pointSetName, pointSet, constraintType, constraintValue
-
-/* class constrainedPointSet */
-/* { */
-/*   public: */
-/*     word pointSetName; */
-/*     pointSet ps; */
-/*     word constraintType; */
-/*     scalar constraintValue; */
-
-/*     constrainedPointSet(const polyMesh &mesh, word pointSetName, word constraintType, scalar constraintValue) */
-/*     { */
-/*       this->pointSetName = pointSetName; */
-/*       this->ps = pointSet(mesh, pointSetName); */
-/*       this->constraintType = constraintType; */
-/*       this->constraintValue = constraintValue; */
-/*     } */
-/* }; */
 
 // Function to find neighboring points of a given point
 labelList findNeighboringPoints(const polyMesh& mesh, label pointIndex) {
-    labelList pointEdges = mesh.pointEdges()[pointIndex];
-    labelList neighboringPointIndices;
+  labelList pointEdges = mesh.pointEdges()[pointIndex];
+  labelList neighboringPointIndices;
 
-    forAll(pointEdges, edgeI) {
-        const edge& currentEdge = mesh.edges()[pointEdges[edgeI]];
+  forAll(pointEdges, edgeI) {
+    const edge& currentEdge = mesh.edges()[pointEdges[edgeI]];
 
-        // Find the neighboring point of the current edge
-        label neighboringPointIndex = (currentEdge.start() == pointIndex) ? currentEdge.end() : currentEdge.start();
+    // Find the neighboring point of the current edge
+    label neighboringPointIndex = (currentEdge.start() == pointIndex) ? currentEdge.end() : currentEdge.start();
 
-        // Add the neighboring point to the list if it's not the same as the original point
-        if (neighboringPointIndex != pointIndex) {
-            neighboringPointIndices.append(neighboringPointIndex);
-        }
+    // Add the neighboring point to the list if it's not the same as the original point
+    if (neighboringPointIndex != pointIndex) {
+      neighboringPointIndices.append(neighboringPointIndex);
     }
+  }
 
-    // Remove duplicates
-    neighboringPointIndices = Foam::uniqueSort(neighboringPointIndices);
+  // Remove duplicates
+  neighboringPointIndices = Foam::uniqueSort(neighboringPointIndices);
 
-    return neighboringPointIndices;
+  return neighboringPointIndices;
 }
 
 int main(int argc, char *argv[]) {
@@ -183,60 +122,60 @@ int main(int argc, char *argv[]) {
   #include "createTime.H"
   #include "createPolyMesh.H"
 
-        // Obtain dictPath here for messages
-        fileName dictPath = args.getOrDefault<fileName>("dict", "");
+  // Obtain dictPath here for messages
+  fileName dictPath = args.getOrDefault<fileName>("dict", "");
 
   // Dictionary to control refinement
   dictionary dict;
   const word dictName("laplacianSmoothDict");
 
-   // Create IOobject for the dictionary
-    IOobject dictIO
+  // Create IOobject for the dictionary
+  IOobject dictIO
     (
-        dictName,
-        runTime.system(),
-        mesh,
-        IOobject::MUST_READ
+      dictName,
+      runTime.system(),
+      mesh,
+      IOobject::MUST_READ
     );
 
-    // Read the dictionary from the specified path
-    dictIO.path() = dictPath;
+  // Read the dictionary from the specified path
+  dictIO.path() = dictPath;
 
- // Read the dictionary
-    dict = IOdictionary(dictIO);
+  // Read the dictionary
+  dict = IOdictionary(dictIO);
 
-    int iterations = dict.getOrDefault<int>("iters", 10);
-    Info << "iters: " << iterations << endl;
+  int iterations = dict.getOrDefault<int>("iters", 10);
+  Info << "iters: " << iterations << endl;
 
-    scalar smoothingFactor = dict.getOrDefault<scalar>("smoothFactor", 1.0);
-    Info << "smoothFactor: " << smoothingFactor << endl;
+  scalar smoothingFactor = dict.getOrDefault<scalar>("smoothFactor", 1.0);
+  Info << "smoothFactor: " << smoothingFactor << endl;
 
-      // Read set construct info from dictionary
-    List<namedDictionary> constrainedPointsDict(dict.lookup("constrainedPoints"));
+  // Read set construct info from dictionary
+  List<namedDictionary> constrainedPointsDict(dict.lookup("constrainedPoints"));
 
-    List<word> constrainedPointSetNames;
-    List<pointSet*> constrainedPointSets;
-    List<word> constraintTypes;
-    List<scalar> constraintValues;
+  List<word> constrainedPointSetNames;
+  List<pointSet*> constrainedPointSets;
+  List<word> constraintTypes;
+  List<scalar> constraintValues;
 
-    for (const namedDictionary& constrainEntry : constrainedPointsDict)
-    {
-      const dictionary& constrainedDict = constrainEntry.dict();
-      word pointSetName = constrainedDict.get<word>("set");
-      Info << "Constraining points in " << pointSetName << endl;
-      constrainedPointSetNames.append(pointSetName);
+  for (const namedDictionary& constrainEntry : constrainedPointsDict)
+  {
+    const dictionary& constrainedDict = constrainEntry.dict();
+    word pointSetName = constrainedDict.get<word>("set");
+    Info << "Constraining points in " << pointSetName << endl;
+    constrainedPointSetNames.append(pointSetName);
 
-      pointSet* ps = new pointSet(mesh, pointSetName);
-      constrainedPointSets.append(ps);
-      Info << " number of points: " << ps->size() << endl;
+    pointSet* ps = new pointSet(mesh, pointSetName);
+    constrainedPointSets.append(ps);
+    Info << " number of points: " << ps->size() << endl;
 
-      word constraintType = constrainedDict.get<word>("constraintType");
-      Info << " constraintType: " << constraintType << endl;
-      constraintTypes.append(constraintType);
-      scalar constraintValue = constrainedDict.getOrDefault<scalar>("value", 1.0);
-      constraintValues.append(constraintValue);
-      Info << " constraintValue: " << constraintValue << endl;
-    }
+    word constraintType = constrainedDict.get<word>("constraintType");
+    Info << " constraintType: " << constraintType << endl;
+    constraintTypes.append(constraintType);
+    scalar constraintValue = constrainedDict.getOrDefault<scalar>("value", 1.0);
+    constraintValues.append(constraintValue);
+    Info << " constraintValue: " << constraintValue << endl;
+  }
 
   const word oldInstance = mesh.pointsInstance();
   const bool overwrite = args.found("overwrite");
@@ -259,41 +198,41 @@ int main(int argc, char *argv[]) {
         sumOfNeighbours += mesh.points()[neighboringPointIndices[i]];
         ++neighbourCount;
       }
-        vector averagePosition = sumOfNeighbours / neighbourCount;
-        newPoints[pointI] =
-          mesh.points()[pointI] +
-          smoothingFactor * (averagePosition - mesh.points()[pointI]);
-        movedPoints++;
+      vector averagePosition = sumOfNeighbours / neighbourCount;
+      newPoints[pointI] =
+        mesh.points()[pointI] +
+        smoothingFactor * (averagePosition - mesh.points()[pointI]);
+      movedPoints++;
 
-          forAll(constrainedPointSetNames, i)
+      forAll(constrainedPointSetNames, i)
+      {
+        if (constrainedPointSets[i]->found(pointI))
+        {
+          /* Info << "Constraining point " << pointI << " in " << constrainedPointSetNames[i] << endl; */
+          if (constraintTypes[i] == "yconst")
           {
-            if (constrainedPointSets[i]->found(pointI))
-            {
-              /* Info << "Constraining point " << pointI << " in " << constrainedPointSetNames[i] << endl; */
-              if (constraintTypes[i] == "yconst")
-              {
-                /* Info << "Constraining y-coordinate to " << constraintValues[i] << endl; */
-                newPoints[pointI].y() = constraintValues[i];
-                constraintCount++;
-              }
-              else if (constraintTypes[i] == "sphere")
-              {
-                /* Info << "Projecting point onto sphere with radius " << constraintValues[i] << endl; */
-                newPoints[pointI] = projectPointOntoSphere(newPoints[pointI], constraintValues[i]);
-                constraintCount++;
-              }
-              else if (constraintTypes[i] == "fixed")
-              {
-                /* Info << "Keeping point fixed." << endl; */
-                newPoints[pointI] = mesh.points()[pointI];
-            movedPoints--;
-              }
-            }
+            /* Info << "Constraining y-coordinate to " << constraintValues[i] << endl; */
+            newPoints[pointI].y() = constraintValues[i];
+            constraintCount++;
           }
+          else if (constraintTypes[i] == "sphere")
+          {
+            /* Info << "Projecting point onto sphere with radius " << constraintValues[i] << endl; */
+            newPoints[pointI] = projectPointOntoSphere(newPoints[pointI], constraintValues[i]);
+            constraintCount++;
+          }
+          else if (constraintTypes[i] == "fixed")
+          {
+            /* Info << "Keeping point fixed." << endl; */
+            newPoints[pointI] = mesh.points()[pointI];
+            movedPoints--;
+          }
+        }
+      }
     }
 
     Info << "Moved " << movedPoints << " points." << endl;
-    /* Info << "Constrained " << constraintCount << " points." << endl; */
+    Info << "Constrained " << constraintCount << " points." << endl;
 
     // Update the mesh with the smoothed points
     mesh.movePoints(newPoints);
