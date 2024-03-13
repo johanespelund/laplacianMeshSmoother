@@ -177,14 +177,6 @@ int main(int argc, char *argv[]) {
   argList::addNote("Boundary smoothing utility.");
   #include "addOverwriteOption.H"
   argList::addOption("dict", "file", "Alternative refineMeshDict");
-
-  /* argList::addOption("iters", "int", "Number of smoothing iterations."); */
-  /* argList::addOption("smooth-factor", "scalar", "Smoothing factor."); */
-  /* /1* argList::addOption("patch", "name", "Name of the patch to smooth."); *1/ */
-  /* argList::addOption("points", "name", "Name of the pointSet to smooth."); */
-  /* argList::addOption("constant-points", "name", "Name of the pointSet to which should not be moved."); */
-  /* argList::addOption("constrain-type", "word", "Constraint type (yconst or rconst)."); */
-  /* argList::addOption("value", "scalar", "Value for the constraint (radius or y-coordinate)."); */
   argList::noFunctionObjects(); // Never use function objects
 
   #include "setRootCase.H"
@@ -246,81 +238,8 @@ int main(int argc, char *argv[]) {
       Info << " constraintValue: " << constraintValue << endl;
     }
 
-    /* // Read constrainedPoints */
-    /* const dictionary& constrainedPointsDict = dict.subDict("constrainedPoints"); */
-
-    /* Info << "constrainedPoints:" << endl; */
-  /* Info << constrainedPointsDict << endl; */
-  // Read the dictionary. It looks like this:
-/* intenalPoints internalPoints; */
-/* iters 10; */
-/* smoothFactor 1.0; */
-
-/* constrainedPoints */
-/* ( */
-/*   { */
-/*     set wallSmoothPoints; */
-/*     constraintType sphere; */
-/*     value $R; */
-/*   } */
-/*   { */
-/*     set bottomSmoothPoints; */
-/*     constraintType yconst; */
-/*     value #eval {$R - $H_G}; */
-/*   } */
-/*   { */
-/*     set fixedPoints; */
-/*     constraintType fixed; */
-/*   } */
-/* ); */
-
-
   const word oldInstance = mesh.pointsInstance();
   const bool overwrite = args.found("overwrite");
-
-  /* label iterations = args.found("iters") */
-  /*                        ? readLabel(args["iters"]) */
-  /*                        : 5; // Default to 10 iterations if not provided */
-
-  /* scalar smoothingFactor = */
-  /*     args.found("smooth-factor") */
-  /*         ? readScalar(args["smooth-factor"]) */
-  /*         : 1.0; // Default smoothing factor to 0.1 if not provided */
-
-  /* word patch_name = args.found("patch") ? word(args["patch"]) : ""; */
-  /* scalar value = */
-  /*     args.found("value") */
-  /*         ? readScalar(args["value"]) */
-  /*         : 1; // Default smoothing factor to 0.1 if not provided */
-  /* word contrain_type = args.found("constrain-type") ? word(args["constrain-type"]) : ""; */
-
-
-  /* Info << "Starting Laplacian smoothing with factor: " << smoothingFactor */
-  /*      << " and iterations: " << iterations << endl; */
-
-  /* word pointSet_name = ""; */
-  /* word const_pointSet_name = ""; */
-
-  /* if (args.found("points")) { */
-  /*   pointSet_name = word(args["points"]); */
-  /*   Info << "Reading points " << pointSet_name << endl; */
-  /* } else { */
-  /*   FatalErrorInFunction << "No pointSet specified." << abort(FatalError); */
-  /* } */
-
-  /* if (args.found("constant-points")) */
-  /* { */
-  /*   const_pointSet_name = word(args["constant-points"]); */
-  /*   Info << "Found constant points "  << const_pointSet_name << endl; */
-  /* } */
-  /* else { */
-  /*   // Need to set the name to something, otherwise the pointSet will be empty */
-  /*   const_pointSet_name = pointSet_name; */
-  /* } */
-
-  /* pointSet const_points(mesh, const_pointSet_name); */ 
-  /* /1* Info << const_points << endl; *1/ */
-
 
   for (label iter = 0; iter < iterations; ++iter) {
     Info << "Iteration " << iter + 1 << endl;

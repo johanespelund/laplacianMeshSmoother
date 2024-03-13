@@ -1,0 +1,43 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.1.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      laplacianSmoothDict;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#include "../parameters"
+
+// internalPoints internalPoints;
+iters 5;
+smoothFactor 1.0;
+
+constrainedPoints
+(
+  {
+    set wallSmoothPoints;
+    constraintType sphere;
+    value $R;
+  }
+  {
+    set bottomSmoothPoints;
+    constraintType yconst;
+    value #eval {$R - $H_G};
+  }
+  {
+    set fixedPoints;
+    constraintType fixed;
+  }
+);
+
+
+// ************************************************************************* //
