@@ -7,3 +7,4 @@ TODO:
   - Add constraint that limits movement in the boundary normal direction, based on the distance from the boundary. This could eliminate the need for the yconst and rconst constraints.
   - Another option is to just constratin the boundary points and let other points be free. This would at least eliminate the need for hardcoded geometry constraints such as yconst and rconst.
     If points that belong to different patches are marked as fixedPoints, the boundary should not change.
+  - Current strategy is to use hardcoded constraints and fixedPoints, and then use refineWallLayer if the first cell height has increase significantly.
