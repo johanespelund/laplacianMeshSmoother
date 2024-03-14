@@ -1,5 +1,9 @@
 # laplacianMeshSmoother
-An OpenFOAM utility to use laplacian smoothing. WIP!
+An OpenFOAM utility to use laplacian smoothing. **WIP!**
+
+## Installation
+Tested using OpenFOAM v2206
+Clone repo and run `wmake`. The executable will be located in `$FOAM_USER_APPBIN` and can be called with `laplacianMeshSmoother` when OpenFOAM is loaded.
 
 TODO:
 - [ ] Add automatic selection of points based on non-orthogonality and/or skewness
