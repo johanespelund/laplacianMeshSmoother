@@ -74,6 +74,74 @@ using namespace Foam;
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
+
+#include "polyMesh.H"
+#include "primitivePatch.H"
+#include "pointField.H"
+
+using namespace Foam;
+
+// Function to calculate the shortest distance from a given mesh point to the nearest boundary patch
+label getClosestBoundaryPoint(const polyMesh& mesh, label pointI) {
+  const vectorField& points = mesh.points();
+  const point& targetPoint = points[pointI];
+
+  scalar minDistSqr = GREAT; // Initialize with a very large number
+  label closestPointIndex = -1;
+
+  // Iterate over all boundary patches
+  forAll(mesh.boundaryMesh(), patchI) {
+    polyPatch pp = mesh.boundaryMesh()[patchI];
+
+    if (!pp.coupled()) { // Skip coupled patches to avoid internal faces
+      labelList patchPoints = pp.meshPoints();
+
+      // Iterate over all points in the current patch to find the closest point
+      forAll(patchPoints, patchPointI) {
+        scalar distSqr = magSqr(targetPoint - mesh.points()[patchPoints[patchPointI]]);
+
+        // Update minimum distance if a closer point is found
+        if (distSqr < minDistSqr) {
+          minDistSqr = distSqr;
+          closestPointIndex = patchPoints[patchPointI];
+        }
+      }
+    }
+  }
+
+  // Return the square root of the shortest squared distance found
+  return closestPointIndex;
+}
+
+vector getBoundaryNormal(const polyMesh& mesh, const label pointIndex) {
+  /* pointField points = mesh.points(); */
+  const polyBoundaryMesh& boundaryMesh = mesh.boundaryMesh();
+
+  vector normal(0, 0, 0);
+
+  // Iterate over boundary faces to find the face containing the given point index
+  forAll(boundaryMesh, patchI) {
+    polyPatch pp = boundaryMesh[patchI];
+    forAll(boundaryMesh[patchI], faceI)
+    {
+      face currentFace = boundaryMesh[patchI][faceI];
+      if (currentFace.found(pointIndex))
+      {
+        vector faceNormal = boundaryMesh[patchI].faceAreas()[faceI];
+        normal += faceNormal;
+      }
+    }
+  }
+  if (mag(normal) > SMALL)
+  {
+    return normal/mag(normal);
+  }
+  else {
+    return vector(0, 0, 0);
+  }
+}
+
+
 // Function to project a point onto a sphere
 point projectPointOntoSphere(const vector& point, double radius) {
   // Calculate the magnitude of the point vector
@@ -150,6 +218,13 @@ int main(int argc, char *argv[]) {
   scalar smoothingFactor = dict.getOrDefault<scalar>("smoothFactor", 1.0);
   Info << "smoothFactor: " << smoothingFactor << endl;
 
+  scalar preserveBoundaryLayer = dict.getOrDefault<scalar>("preserveBoundaryLayer", 0.0);
+  Info << "preserveBoundaryLayer: " << preserveBoundaryLayer << endl;
+  if (preserveBoundaryLayer > 0.0)
+  {
+    WarningInFunction << "Preserve boundary layer functionality is experimental and may not work as expected." << endl;
+  }
+
   // Read set construct info from dictionary
   List<namedDictionary> constrainedPointsDict(dict.lookup("constrainedPoints"));
 
@@ -167,7 +242,7 @@ int main(int argc, char *argv[]) {
 
     pointSet* ps = new pointSet(mesh, pointSetName);
     constrainedPointSets.append(ps);
-    Info << " number of points: " << ps->size() << endl;
+    Info << " number of points: " << constrainedPointSets.last()->size() << endl;
 
     word constraintType = constrainedDict.get<word>("constraintType");
     Info << " constraintType: " << constraintType << endl;
@@ -199,42 +274,51 @@ int main(int argc, char *argv[]) {
         ++neighbourCount;
       }
       vector averagePosition = sumOfNeighbours / neighbourCount;
-      newPoints[pointI] =
-        mesh.points()[pointI] +
-        smoothingFactor * (averagePosition - mesh.points()[pointI]);
-      movedPoints++;
+      vector movement = smoothingFactor * (averagePosition - mesh.points()[pointI]);
+
+      if (preserveBoundaryLayer > 0.0)
+      {
+        label closestBoundaryPoint = getClosestBoundaryPoint(mesh, pointI);
+        vector distance = mesh.points()[closestBoundaryPoint] - mesh.points()[pointI];
+        if ((mag(distance) < preserveBoundaryLayer) )
+        {
+          vector boundaryNormal = getBoundaryNormal(mesh, closestBoundaryPoint);
+          vector parallelComponent = (movement & boundaryNormal) * boundaryNormal;
+          movement-= parallelComponent;
+          constraintCount++;
+        }
+      }
 
       forAll(constrainedPointSetNames, i)
       {
         if (constrainedPointSets[i]->found(pointI))
         {
-          /* Info << "Constraining point " << pointI << " in " << constrainedPointSetNames[i] << endl; */
           if (constraintTypes[i] == "yconst")
           {
-            /* Info << "Constraining y-coordinate to " << constraintValues[i] << endl; */
-            newPoints[pointI].y() = constraintValues[i];
+            movement.y() = constraintValues[i] - mesh.points()[pointI].y();
             constraintCount++;
           }
-          else if (constraintTypes[i] == "sphere")
+          if (constraintTypes[i] == "sphere")
           {
-            /* Info << "Projecting point onto sphere with radius " << constraintValues[i] << endl; */
-            newPoints[pointI] = projectPointOntoSphere(newPoints[pointI], constraintValues[i]);
+            point onSphere = projectPointOntoSphere(mesh.points()[pointI] + movement, constraintValues[i]);
+            movement = onSphere - mesh.points()[pointI];
             constraintCount++;
           }
-          else if (constraintTypes[i] == "fixed")
+          if (constraintTypes[i] == "fixed")
           {
-            /* Info << "Keeping point fixed." << endl; */
-            newPoints[pointI] = mesh.points()[pointI];
+            movement = vector(0, 0, 0);
             movedPoints--;
           }
         }
       }
-    }
 
+      newPoints[pointI] = mesh.points()[pointI] + movement;
+      movedPoints++;
+
+    }
+    // Update the mesh with the smoothed points
     Info << "Moved " << movedPoints << " points." << endl;
     Info << "Constrained " << constraintCount << " points." << endl;
-
-    // Update the mesh with the smoothed points
     mesh.movePoints(newPoints);
   }
 

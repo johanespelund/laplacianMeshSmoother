@@ -17,9 +17,11 @@ FoamFile
 
 #include "../parameters"
 
-// internalPoints internalPoints;
-iters 5;
-smoothFactor 1.0;
+// Prevent moving points in the boundary normal direction, for points a distance from the boundaries.
+// Not working properly. Instead, refineWallLayer is used after smoothing.
+preserveBoundaryLayer 0; //#eval {10*$wall_cell_size}; 
+iters 15;
+smoothFactor 1;
 
 constrainedPoints
 (
