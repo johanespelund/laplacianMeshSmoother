@@ -82,15 +82,18 @@ using namespace Foam;
 using namespace Foam;
 
 // Function to calculate the shortest distance from a given mesh point to the nearest boundary patch
-label getClosestBoundaryPoint(const polyMesh& mesh, label pointI) {
+label getClosestBoundaryPoint(const polyMesh& mesh, label pointI, scalar cutoff, label patchI) {
   const vectorField& points = mesh.points();
   const point& targetPoint = points[pointI];
 
   scalar minDistSqr = GREAT; // Initialize with a very large number
   label closestPointIndex = -1;
+  scalar belowCutoff = false;
+  scalar cutoffSqr = cutoff * cutoff;
+  /* int previousClosestPatch = 0; */
 
   // Iterate over all boundary patches
-  forAll(mesh.boundaryMesh(), patchI) {
+  /* forAll(mesh.boundaryMesh(), patchI) { */
     polyPatch pp = mesh.boundaryMesh()[patchI];
 
     if (!pp.coupled()) { // Skip coupled patches to avoid internal faces
@@ -105,12 +108,30 @@ label getClosestBoundaryPoint(const polyMesh& mesh, label pointI) {
           minDistSqr = distSqr;
           closestPointIndex = patchPoints[patchPointI];
         }
+          /* if (previousClosestPatch < patchI && distSqr < cutoffSqr) { */
+          /*   /1* Info << "Previous closest patch: " << previousClosestPatch << " Current closest patch: " << patchI << endl; *1/ */
+          /*   /1* Info << "Info: Multiple boundary patches within cutoff distance of point " << pointI << endl; *1/ */
+          /*   return -1; */
+          /* } */
+        /* if (cutoff > 0.0 && distSqr < cutoffSqr) { */
+        /*   belowCutoff = true; */
+        /*   previousClosestPatch = patchI; */
+        /* } */
       }
     }
-  }
+    /* if (belowCutoff == false) */
+    /* { */
+    /*   previousClosestPatch++; */
+    /* } */
+  /* } */
 
   // Return the square root of the shortest squared distance found
-  return closestPointIndex;
+  /* if (belowCutoff) { */
+    return closestPointIndex;
+  /* } */
+  /* else { */
+    /* return -1; */
+  /* } */
 }
 
 vector getBoundaryNormal(const polyMesh& mesh, const label pointIndex) {
@@ -275,47 +296,88 @@ int main(int argc, char *argv[]) {
       }
       vector averagePosition = sumOfNeighbours / neighbourCount;
       vector movement = smoothingFactor * (averagePosition - mesh.points()[pointI]);
+      int numberOfClosePatches = 0;
 
       if (preserveBoundaryLayer > 0.0)
       {
-        label closestBoundaryPoint = getClosestBoundaryPoint(mesh, pointI);
-        vector distance = mesh.points()[closestBoundaryPoint] - mesh.points()[pointI];
-        if ((mag(distance) < preserveBoundaryLayer) )
+        forAll(mesh.boundaryMesh(), patchI)
         {
-          vector boundaryNormal = getBoundaryNormal(mesh, closestBoundaryPoint);
-          vector parallelComponent = (movement & boundaryNormal) * boundaryNormal;
-          movement-= parallelComponent;
-          constraintCount++;
+          label closestBoundaryPoint = getClosestBoundaryPoint(mesh, pointI, preserveBoundaryLayer, patchI);
+          if (closestBoundaryPoint != -1)
+          {
+            vector distance = mesh.points()[closestBoundaryPoint] - mesh.points()[pointI];
+            if (mag(distance) < preserveBoundaryLayer)
+            {
+              numberOfClosePatches++;
+              vector boundaryNormal = getBoundaryNormal(mesh, closestBoundaryPoint);
+              vector parallelComponent = (movement & boundaryNormal) * boundaryNormal;
+              movement-= parallelComponent;
+            }
+          }
+          /* else */
+          /* { */
+          /*   movement = vector(0, 0, 0); */
+          /*   movedPoints--; */
+          /*   constraintCount++; */
+          /* } */
+        }
+        movedPoints++;
+        constraintCount++;
+        if (numberOfClosePatches > 1){
+          /* Info << "Found a point which is close to two patches! Not moving at all." << endl; */
+          movement = vector(0, 0, 0);
+          movedPoints--;
         }
       }
+      /* label closestBoundaryPoint = getClosestBoundaryPoint(mesh, pointI, preserveBoundaryLayer); */
+      /* if (closestBoundaryPoint != -1) */
+      /* { */
+      /*   vector distance = mesh.points()[closestBoundaryPoint] - mesh.points()[pointI]; */
+      /*     vector boundaryNormal = getBoundaryNormal(mesh, closestBoundaryPoint); */
+      /*     vector parallelComponent = (movement & boundaryNormal) * boundaryNormal; */
+      /*     scalar x = mag(distance); */
+      /*     scalar y = 8/7 - x/(7*preserveBoundaryLayer);  //x/(3*preserveBoundaryLayer) - 1/3; */
+      /*   // TODO: Restrict movement in two directions for points close to the boundary */
+      /*     movement-= parallelComponent*min(1,max(0, y)); */
+      /*     movedPoints++; */
+      /*     constraintCount++; */
+      /* } */
+      /* else */
+      /* { */
+      /*   movement = vector(0, 0, 0); */
+      /*   movedPoints--; */
+      /*   constraintCount++; */
+      /* } */
+      /* } */
 
-      forAll(constrainedPointSetNames, i)
-      {
-        if (constrainedPointSets[i]->found(pointI))
-        {
-          if (constraintTypes[i] == "yconst")
-          {
-            movement.y() = constraintValues[i] - mesh.points()[pointI].y();
-            constraintCount++;
-          }
-          if (constraintTypes[i] == "sphere")
-          {
-            point onSphere = projectPointOntoSphere(mesh.points()[pointI] + movement, constraintValues[i]);
-            movement = onSphere - mesh.points()[pointI];
-            constraintCount++;
-          }
-          if (constraintTypes[i] == "fixed")
-          {
-            movement = vector(0, 0, 0);
-            movedPoints--;
-          }
-        }
-      }
+      /* forAll(constrainedPointSetNames, i) */
+      /* { */
+      /*   if (constrainedPointSets[i]->found(pointI)) */
+      /*   { */
+      /*     if (constraintTypes[i] == "yconst") */
+      /*     { */
+      /*       movement.y() = constraintValues[i] - mesh.points()[pointI].y(); */
+      /*       constraintCount++; */
+      /*     } */
+      /*     if (constraintTypes[i] == "sphere") */
+      /*     { */
+      /*       point onSphere = projectPointOntoSphere(mesh.points()[pointI] + movement, constraintValues[i]); */
+      /*       movement = onSphere - mesh.points()[pointI]; */
+      /*       constraintCount++; */
+      /*     } */
+      /*     if (constraintTypes[i] == "fixed") */
+      /*     { */
+      /*       movement = vector(0, 0, 0); */
+      /*       movedPoints--; */
+      /*     } */
+      /*   } */
+      /* } */
 
       newPoints[pointI] = mesh.points()[pointI] + movement;
       movedPoints++;
 
     }
+
     // Update the mesh with the smoothed points
     Info << "Moved " << movedPoints << " points." << endl;
     Info << "Constrained " << constraintCount << " points." << endl;
