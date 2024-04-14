@@ -91,43 +91,43 @@ label getClosestBoundaryPoint(const polyMesh& mesh, label pointI, scalar cutoff,
 
   // Iterate over all boundary patches
   /* forAll(mesh.boundaryMesh(), patchI) { */
-    polyPatch pp = mesh.boundaryMesh()[patchI];
+  polyPatch pp = mesh.boundaryMesh()[patchI];
 
-    if (!pp.coupled()) { // Skip coupled patches to avoid internal faces
-      labelList patchPoints = pp.meshPoints();
+  if (!pp.coupled()) { // Skip coupled patches to avoid internal faces
+    labelList patchPoints = pp.meshPoints();
 
-      // Iterate over all points in the current patch to find the closest point
-      forAll(patchPoints, patchPointI) {
-        scalar distSqr = magSqr(targetPoint - mesh.points()[patchPoints[patchPointI]]);
+    // Iterate over all points in the current patch to find the closest point
+    forAll(patchPoints, patchPointI) {
+      scalar distSqr = magSqr(targetPoint - mesh.points()[patchPoints[patchPointI]]);
 
-        // Update minimum distance if a closer point is found
-        if (distSqr < minDistSqr) {
-          minDistSqr = distSqr;
-          closestPointIndex = patchPoints[patchPointI];
-        }
-          /* if (previousClosestPatch < patchI && distSqr < cutoffSqr) { */
-          /*   /1* Info << "Previous closest patch: " << previousClosestPatch << " Current closest patch: " << patchI << endl; *1/ */
-          /*   /1* Info << "Info: Multiple boundary patches within cutoff distance of point " << pointI << endl; *1/ */
-          /*   return -1; */
-          /* } */
-        /* if (cutoff > 0.0 && distSqr < cutoffSqr) { */
-        /*   belowCutoff = true; */
-        /*   previousClosestPatch = patchI; */
-        /* } */
+      // Update minimum distance if a closer point is found
+      if (distSqr < minDistSqr) {
+        minDistSqr = distSqr;
+        closestPointIndex = patchPoints[patchPointI];
       }
+      /* if (previousClosestPatch < patchI && distSqr < cutoffSqr) { */
+      /*   /1* Info << "Previous closest patch: " << previousClosestPatch << " Current closest patch: " << patchI << endl; *1/ */
+      /*   /1* Info << "Info: Multiple boundary patches within cutoff distance of point " << pointI << endl; *1/ */
+      /*   return -1; */
+      /* } */
+      /* if (cutoff > 0.0 && distSqr < cutoffSqr) { */
+      /*   belowCutoff = true; */
+      /*   previousClosestPatch = patchI; */
+      /* } */
     }
-    /* if (belowCutoff == false) */
-    /* { */
-    /*   previousClosestPatch++; */
-    /* } */
+  }
+  /* if (belowCutoff == false) */
+  /* { */
+  /*   previousClosestPatch++; */
+  /* } */
   /* } */
 
   // Return the square root of the shortest squared distance found
   /* if (belowCutoff) { */
-    return closestPointIndex;
+  return closestPointIndex;
   /* } */
   /* else { */
-    /* return -1; */
+  /* return -1; */
   /* } */
 }
 
@@ -267,7 +267,7 @@ int main(int argc, char *argv[]) {
       FatalErrorInFunction << "Missing 'type' entry in dictionary" << endl;
     }
     else
-    {
+  {
       word type = constrainedDict.get<word>("type");
       Info << " type: " << type << endl;
       if (type == "patch")
@@ -278,8 +278,8 @@ int main(int argc, char *argv[]) {
         /* label patchID = mesh.boundaryMesh().findPatchID(patchName); */
         /* polyPatch& currentPatch = mesh.boundaryMesh()[patchID]; */
         ps = new pointSet(mesh, patchName, 0);
-        forAll(mesh.boundaryMesh()[patchName], faceI)
-        {
+       forAll(mesh.boundaryMesh()[patchName], faceI)
+       {
           face currentFace = mesh.boundaryMesh()[patchName][faceI];
           forAll(currentFace, pointI)
           {
@@ -288,7 +288,7 @@ int main(int argc, char *argv[]) {
         }
         Info << "Constraining points in patch " << patchName << " with " << ps->size() << " poinst." << endl;
       }
-       else {
+      else {
         word pointSetName = constrainedDict.get<word>("set");
         constrainedNames.append(pointSetName);
         ps = new pointSet(mesh, pointSetName);
@@ -326,6 +326,7 @@ int main(int argc, char *argv[]) {
     pointField newPoints(mesh.points().size());
     int movedPoints = 0;
     label constraintCount = 0;
+    Info << "preservedBoundaryLayer: " << preserveBoundaryLayer << endl;
 
     // Loop over all points in the mesh
     forAll(mesh.points(), pointI) {
@@ -354,17 +355,17 @@ int main(int argc, char *argv[]) {
           } else {
             // Check if the point is in a patch
             closestBoundaryPoint = -1;
-              forAll(mesh.boundaryMesh()[patchI], faceI)
+            forAll(mesh.boundaryMesh()[patchI], faceI)
+            {
+              face currentFace = mesh.boundaryMesh()[patchI][faceI];
+              if (currentFace.found(pointI))
               {
-                face currentFace = mesh.boundaryMesh()[patchI][faceI];
-                if (currentFace.found(pointI))
-                {
-                  /* Info << "Found a point on a boundary patch!" << endl; */
-                  closestBoundaryPoint = pointI;
-                  break;
-                }
+                /* Info << "Found a point on a boundary patch!" << endl; */
+                closestBoundaryPoint = pointI;
+                break;
               }
             }
+          }
 
           if (closestBoundaryPoint != -1)
           {
@@ -413,28 +414,63 @@ int main(int argc, char *argv[]) {
       /*   movedPoints--; */
       /*   constraintCount++; */
       /* } */
-      /* } */
 
+      bool isAlreadyConstrained = false;
       forAll(constrainedNames, i)
       {
         if (constrainedPointSets[i]->found(pointI))
         {
+          constraintCount++;
           if (constraintTypes[i] == "yconst")
           {
             movement.y() = constraintValues[i] - mesh.points()[pointI].y();
             constraintCount++;
+            if (isAlreadyConstrained)
+            {
+              movement = vector(0, 0, 0);
+            }
+            isAlreadyConstrained = true;
           }
           if (constraintTypes[i] == "sphere")
           {
             point onSphere = projectPointOntoSphere(mesh.points()[pointI] + movement, constraintValues[i]);
             movement = onSphere - mesh.points()[pointI];
             constraintCount++;
+            if (isAlreadyConstrained)
+            {
+              movement = vector(0, 0, 0);
+            }
+            isAlreadyConstrained = true;
           }
 
           if (constraintTypes[i] == "constDir")
           {
             // Constrain movement of a specific direction
-            movement -= (movement & constraintDirections[i]) * constraintDirections[i];
+            if (isAlreadyConstrained)
+            {
+              movement = vector(0, 0, 0);
+            }
+            else
+          {
+              movement -= (movement & constraintDirections[i]) * constraintDirections[i];
+              isAlreadyConstrained = true;
+            }
+          }
+
+          if (constraintTypes[i] == "constRadius")
+          {
+            if (isAlreadyConstrained)
+            {
+              movement = vector(0, 0, 0);
+            }
+            else
+          {
+              vector radialUnitVector = mesh.points()[pointI] / mag(mesh.points()[pointI]);
+              vector radialMovement = (movement & radialUnitVector) * radialUnitVector;
+              movement -= radialMovement;
+              isAlreadyConstrained = true;
+
+            }
           }
 
           if (constraintTypes[i] == "fixed")
