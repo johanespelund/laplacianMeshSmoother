@@ -446,15 +446,39 @@ int main(int argc, char *argv[]) {
           if (constraintTypes[i] == "constDir")
           {
             // Constrain movement of a specific direction
+            /* Info << "Movement before: " << movement << endl; */
             if (isAlreadyConstrained)
             {
               movement = vector(0, 0, 0);
             }
             else
           {
-              movement -= (movement & constraintDirections[i]) * constraintDirections[i];
-              isAlreadyConstrained = true;
+              // Apply a limiter to make a smooth transition between the constrained and unconstrained movement
+              /* scalar y0 = 0.32; */
+              /* scalar deltay = 0.035; */
+              scalar limiter = 1;
+              // Between y0 plus minus deltay, the movement is constrained, another deltay, the movement constraint
+              // is linearly reduced to zero
+              /* if (constraintDirections[i].y() > 0) */
+              /* { */
+              /*   if (mesh.points()[pointI].y() > y0 - deltay && mesh.points()[pointI].y() < y0 + deltay) */
+              /*   { */
+              /*     limiter = 1; */
+              /*   } */
+              /*   else if (mesh.points()[pointI].y() > y0 + deltay) */
+              /*   { */
+              /*     limiter = 1 - (mesh.points()[pointI].y() - y0 - deltay) / deltay; */
+              /*   } */
+              /*   else */
+              /*   { */
+              /*     limiter = 0; */
+              /*   } */
+              /* } */
+
+              movement -= limiter*(movement & constraintDirections[i]) * constraintDirections[i];
+              /* isAlreadyConstrained = true; */
             }
+            /* Info << "Movement after: " << movement << endl; */
           }
 
           if (constraintTypes[i] == "constRadius")
