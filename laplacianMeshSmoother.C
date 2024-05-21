@@ -214,18 +214,21 @@ int main(int argc, char *argv[]) {
   // Dictionary to control refinement
   dictionary dict;
   const word dictName("laplacianSmoothDict");
+  #include "setSystemMeshDictionaryIO.H"
 
-  // Create IOobject for the dictionary
-  IOobject dictIO
-    (
-      dictName,
-      runTime.system(),
-      mesh,
-      IOobject::MUST_READ
-    );
+  Info << "Reading dictionary " << dictName << " from " << dictPath << endl;
+
+  /* // Create IOobject for the dictionary */
+  /* IOobject dictIO */
+  /*   ( */
+  /*     dictName, */
+  /*     runTime.system(), */
+  /*     mesh, */
+  /*     IOobject::MUST_READ */
+  /*   ); */
 
   // Read the dictionary from the specified path
-  dictIO.path() = dictPath;
+  /* dictIO.path() = dictPath; */
 
   // Read the dictionary
   dict = IOdictionary(dictIO);
