@@ -446,6 +446,22 @@ int main(int argc, char *argv[]) {
             isAlreadyConstrained = true;
           }
 
+          if (constraintTypes[i] == "constX")
+          {
+            movement.x() = 0;
+              isAlreadyConstrained = true;
+          }
+          if (constraintTypes[i] == "constY")
+          {
+            movement.y() = 0;
+              isAlreadyConstrained = true;
+          }
+          if (constraintTypes[i] == "constZ")
+          {
+            movement.z() = 0;
+              isAlreadyConstrained = true;
+          }
+
           if (constraintTypes[i] == "constDir")
           {
             // Constrain movement of a specific direction
