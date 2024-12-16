@@ -174,6 +174,19 @@ point projectPointOntoSphere(const vector& point, double radius) {
   return projectedPoint;
 }
 
+point projectPointOntoZCylinder(const vector& point, double radius) {
+  // Project a point onto a circli in the xy-plane, keep z-coordinate
+  vector projectedPoint = point;
+  projectedPoint.z() = 0;
+  scalar currentRadius = mag(projectedPoint);
+  scalar scaleFactor = radius / currentRadius;
+  projectedPoint.x() *= scaleFactor;
+  projectedPoint.y() *= scaleFactor;
+  projectedPoint.z() = point.z();
+
+  return projectedPoint;
+}
+
 // Function to find neighboring points of a given point
 labelList findNeighboringPoints(const polyMesh& mesh, label pointIndex) {
   labelList pointEdges = mesh.pointEdges()[pointIndex];
@@ -329,7 +342,7 @@ int main(int argc, char *argv[]) {
     pointField newPoints(mesh.points().size());
     int movedPoints = 0;
     label constraintCount = 0;
-    Info << "preservedBoundaryLayer: " << preserveBoundaryLayer << endl;
+    /* Info << "preservedBoundaryLayer: " << preserveBoundaryLayer << endl; */
 
     // Loop over all points in the mesh
     forAll(mesh.points(), pointI) {
@@ -432,7 +445,7 @@ int main(int argc, char *argv[]) {
             {
               movement = vector(0, 0, 0);
             }
-            isAlreadyConstrained = true;
+            /* isAlreadyConstrained = true; */
           }
           if (constraintTypes[i] == "sphere")
           {
@@ -443,13 +456,13 @@ int main(int argc, char *argv[]) {
             {
               movement = vector(0, 0, 0);
             }
-            isAlreadyConstrained = true;
+            /* isAlreadyConstrained = true; */
           }
 
           if (constraintTypes[i] == "constX")
           {
             movement.x() = 0;
-              isAlreadyConstrained = true;
+              /* isAlreadyConstrained = true; */
           }
           if (constraintTypes[i] == "constY")
           {
@@ -459,7 +472,7 @@ int main(int argc, char *argv[]) {
           if (constraintTypes[i] == "constZ")
           {
             movement.z() = 0;
-              isAlreadyConstrained = true;
+              /* isAlreadyConstrained = true; */
           }
 
           if (constraintTypes[i] == "constDir")
@@ -500,7 +513,7 @@ int main(int argc, char *argv[]) {
             /* Info << "Movement after: " << movement << endl; */
           }
 
-          if (constraintTypes[i] == "constRadius")
+          if (constraintTypes[i] == "constRadiusXY")
           {
             if (isAlreadyConstrained)
             {
@@ -508,10 +521,19 @@ int main(int argc, char *argv[]) {
             }
             else
           {
-              vector radialUnitVector = mesh.points()[pointI] / mag(mesh.points()[pointI]);
-              vector radialMovement = (movement & radialUnitVector) * radialUnitVector;
-              movement -= radialMovement;
-              isAlreadyConstrained = true;
+              /* vector radialUnitVector = mesh.points()[pointI] / mag(mesh.points()[pointI]); */
+              /* vector radialMovement = (movement & radialUnitVector) * radialUnitVector; */
+              /* movement -= radialMovement; */
+              // New method. Project the point onto a sphere with the given radius, and then calculate the movement
+              scalar oldRadiusXY = mag(vector(mesh.points()[pointI].x(), mesh.points()[pointI].y(), 0));
+              scalar newRadiusXY = mag(vector(mesh.points()[pointI].x() + movement.x(), mesh.points()[pointI].y() + movement.y(), 0));
+              scalar scaleFactor = oldRadiusXY / newRadiusXY;
+              vector projectedPoint = vector(mesh.points()[pointI].x() + movement.x(), mesh.points()[pointI].y() + movement.y(), 0) * scaleFactor;
+              movement.x() = projectedPoint.x() - mesh.points()[pointI].x();
+              movement.y() = projectedPoint.y() - mesh.points()[pointI].y();
+
+              
+              /* isAlreadyConstrained = true; */
 
             }
           }
@@ -519,6 +541,7 @@ int main(int argc, char *argv[]) {
           if (constraintTypes[i] == "fixed")
           {
             movement = vector(0, 0, 0);
+            isAlreadyConstrained = true;
             movedPoints--;
           }
         }
