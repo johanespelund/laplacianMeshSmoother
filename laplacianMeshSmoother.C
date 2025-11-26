@@ -54,21 +54,37 @@ Description
 
 \*---------------------------------------------------------------------------*/
 
+#define OF12
+
 #include "argList.H"
 #include "Time.H"
 #include "polyMesh.H"
 #include "polyTopoChange.H"
-#include "mapPolyMesh.H"
-#include "edgeCollapser.H"
 #include "meshTools.H"
 #include "Pair.H"
 #include "globalIndex.H"
 #include "topoSet.H"
-#include "processorMeshes.H"
 #include "IOdictionary.H"
-#include "namedDictionary.H"
+#include "dictionary.H"
 #include "pointSet.H"
 #include "faceList.H"
+#include "wallDist.H"
+#include "volPointInterpolation.H"
+#include "wedgePolyPatch.H"
+#include "wordReList.H"
+
+#include <chrono>
+
+#ifdef OF12
+
+#include "systemDict.H"
+
+#else
+
+#include "PackedBoolList.H"
+
+
+#endif
 
 using namespace Foam;
 
@@ -143,7 +159,11 @@ vector getBoundaryNormal(const polyMesh& mesh, const label pointIndex) {
     forAll(boundaryMesh[patchI], faceI)
     {
       face currentFace = boundaryMesh[patchI][faceI];
+      #ifdef OF12
+      if (findIndex(currentFace, pointIndex) != -1)
+      #else
       if (currentFace.found(pointIndex))
+      #endif
       {
         vector faceNormal = boundaryMesh[patchI].faceAreas()[faceI];
         normal += faceNormal;
@@ -205,7 +225,11 @@ labelList findNeighboringPoints(const polyMesh& mesh, label pointIndex) {
   }
 
   // Remove duplicates
-  neighboringPointIndices = Foam::uniqueSort(neighboringPointIndices);
+    #ifdef OF12
+    Foam::sort(neighboringPointIndices);
+    #else
+    neighboringPointIndices = Foam::uniqueSort(neighboringPointIndices);
+    #endif
 
   return neighboringPointIndices;
 }
@@ -214,22 +238,45 @@ int main(int argc, char *argv[]) {
 
   argList::addNote("Boundary smoothing utility.");
   #include "addOverwriteOption.H"
+  #include "addRegionOption.H"
   argList::addOption("dict", "file", "Alternative refineMeshDict");
-  argList::noFunctionObjects(); // Never use function objects
-
   #include "setRootCase.H"
+  #ifdef OF12
+  #include "createTimeNoFunctionObjects.H"
+  Foam::word meshRegionName = polyMesh::defaultRegion;
+  args.optionReadIfPresent("region", meshRegionName);
+  #else
+  argList::noFunctionObjects(); // Never use function objects
   #include "createTime.H"
-  #include "createPolyMesh.H"
+  #include "addRegionOption.H"
+  #endif
+
+  #include "createNamedPolyMesh.H"
 
   // Obtain dictPath here for messages
+  #ifdef OF12
+  fileName dictPath = args.optionLookupOrDefault<fileName>("dict", "");
+  #else
   fileName dictPath = args.getOrDefault<fileName>("dict", "");
+  #endif
 
-  // Dictionary to control refinement
-  dictionary dict;
   const word dictName("laplacianSmoothDict");
-  #include "setSystemMeshDictionaryIO.H"
-
+  // Dictionary to control refinement
   Info << "Reading dictionary " << dictName << " from " << dictPath << endl;
+
+  #ifdef OF12
+
+  const IOdictionary dict(systemDict(dictName, args, mesh));
+
+  #else
+
+  dictionary dict;
+  #include "setSystemMeshDictionaryIO.H"
+  // Read the dictionary
+  dict = IOdictionary(dictIO);
+
+  #endif
+
 
   /* // Create IOobject for the dictionary */
   /* IOobject dictIO */
@@ -243,24 +290,31 @@ int main(int argc, char *argv[]) {
   // Read the dictionary from the specified path
   /* dictIO.path() = dictPath; */
 
-  // Read the dictionary
-  dict = IOdictionary(dictIO);
 
+  #ifdef OF12
+  int iterations = dict.lookupOrDefault<int>("iters", 10);
+  int boundaryNormalFreq = dict.lookupOrDefault<int>("boundaryNormalFreq", 1);
+  scalar smoothingFactor = dict.lookupOrDefault<scalar>("smoothFactor", 1.0);
+  scalar preserveBoundaryLayer = dict.lookupOrDefault<scalar>("preserveBoundaryLayer", 0.0);
+  wordReList boundaryNormalPatches = dict.lookup("boundaryNormalPatches");
+  #else
   int iterations = dict.getOrDefault<int>("iters", 10);
-  Info << "iters: " << iterations << endl;
-
+  int boundaryNormalFreq = dict.getOrDefault<int>("boundaryNormalFreq", 1);
   scalar smoothingFactor = dict.getOrDefault<scalar>("smoothFactor", 1.0);
-  Info << "smoothFactor: " << smoothingFactor << endl;
-
   scalar preserveBoundaryLayer = dict.getOrDefault<scalar>("preserveBoundaryLayer", 0.0);
+  wordReList boundaryNormalPatches = dict.lookup("boundaryNormalPatches");
+  #endif
+  Info << "iters: " << iterations << endl;
+  Info << "smoothFactor: " << smoothingFactor << endl;
   Info << "preserveBoundaryLayer: " << preserveBoundaryLayer << endl;
+  Info << "boundaryNormalPatches: " << boundaryNormalPatches << endl;
   if (preserveBoundaryLayer > 0.0)
   {
     WarningInFunction << "Preserve boundary layer functionality is experimental and may not work as expected." << endl;
   }
 
   // Read set construct info from dictionary
-  List<namedDictionary> constrainedPointsDict(dict.lookup("constrainedPoints"));
+  List<dictionary> constrainedPointsDict(dict.lookup("constrainedPoints"));
 
   List<word> constrainedNames;
   List<word> constrainedPatchNames;
@@ -269,9 +323,9 @@ int main(int argc, char *argv[]) {
   List<scalar> constraintValues;
   List<vector> constraintDirections;
 
-  for (const namedDictionary& constrainEntry : constrainedPointsDict)
+  for (const dictionary& constrainEntry : constrainedPointsDict)
   {
-    const dictionary& constrainedDict = constrainEntry.dict();
+    const dictionary& constrainedDict = constrainEntry;
 
     pointSet* ps = nullptr;
 
@@ -284,11 +338,19 @@ int main(int argc, char *argv[]) {
     }
     else
   {
+      #ifdef OF12
+      word type = constrainedDict.lookup("type");
+      #else
       word type = constrainedDict.get<word>("type");
+      #endif
       Info << " type: " << type << endl;
       if (type == "patch")
       {
+        #ifdef OF12
+        word patchName = constrainedDict.lookup("patch");
+        #else
         word patchName = constrainedDict.get<word>("patch");
+        #endif
         Info << " patch: " << patchName << endl;
         constrainedNames.append(patchName);
         /* label patchID = mesh.boundaryMesh().findPatchID(patchName); */
@@ -305,7 +367,11 @@ int main(int argc, char *argv[]) {
         Info << "Constraining points in patch " << patchName << " with " << ps->size() << " poinst." << endl;
       }
       else {
+        #ifdef OF12
+        word pointSetName = constrainedDict.lookup("set");
+        #else
         word pointSetName = constrainedDict.get<word>("set");
+        #endif
         constrainedNames.append(pointSetName);
         ps = new pointSet(mesh, pointSetName);
         Info << "Constraining points in set " << pointSetName << " with " << ps->size() << " poinst." << endl;
@@ -316,17 +382,29 @@ int main(int argc, char *argv[]) {
     constrainedPointSets.append(ps);
     Info << " number of points: " << constrainedPointSets.last()->size() << endl;
 
+    #ifdef OF12
+    word constraintType = constrainedDict.lookup("constraintType");
+    #else
     word constraintType = constrainedDict.get<word>("constraintType");
+    #endif
     Info << " constraintType: " << constraintType << endl;
     constraintTypes.append(constraintType);
 
+    #ifdef OF12
+    scalar constraintValue = constrainedDict.lookupOrDefault<scalar>("value", 1.0);
+    #else
     scalar constraintValue = constrainedDict.getOrDefault<scalar>("value", 1.0);
+    #endif
     constraintValues.append(constraintValue);
 
     vector constraintDirection(0, 0, 0);
     if (constraintType == "constDir")
     {
+      #ifdef OF12
+      constraintDirection = constrainedDict.lookup("direction");
+      #else
       constraintDirection = constrainedDict.get<vector>("direction");
+      #endif
       Info << " constraintDirection: " << constraintDirection << endl;
     }
     constraintDirections.append(constraintDirection);
@@ -334,22 +412,200 @@ int main(int argc, char *argv[]) {
     Info << " constraintValue: " << constraintValue << endl;
   }
 
-  const word oldInstance = mesh.pointsInstance();
-  const bool overwrite = args.found("overwrite");
 
+  const word oldInstance = mesh.pointsInstance();
+  #ifdef OF12
+  const bool overwrite = args.options().found("overwrite");
+  #else
+  const bool overwrite = args.found("overwrite");
+  #endif
+
+  const polyBoundaryMesh& patches = mesh.boundaryMesh();
+  label nPoints = mesh.nPoints();
+
+  // Count how many patches each point belongs to
+  labelList patchCount(nPoints, 0);
+
+  forAll(patches, patchI)
+  {
+      const polyPatch& pp = patches[patchI];
+      const labelList& patchPts = pp.meshPoints();
+
+      for (label pt : patchPts)
+      {
+          patchCount[pt]++;
+      }
+  }
+  
+  // labelList boundaryNormalPatchIDs;
+  // forAll(boundaryNormalPatches, i)
+  // {
+  //     word patchName = boundaryNormalPatches[i];
+  //     #ifdef OF12
+  //     label patchID = mesh.boundaryMesh().findIndex(patchName);
+  //     #else
+  //     label patchID = mesh.boundaryMesh().findPatchID(patchName);
+  //     #endif
+  //     if (patchID == -1)
+  //     {
+  //         FatalErrorInFunction << "Patch " << patchName << " not found in mesh." << endl;
+  //     }
+  //     boundaryNormalPatchIDs.append(patchID);
+  // }
+  //
+  // Info << "Boundary normal patch IDs: " << boundaryNormalPatchIDs << endl;
+
+  labelHashSet boundaryNormalPatchesSet(mesh.boundaryMesh().patchSet(boundaryNormalPatches));
+  labelList boundaryNormalPatchesIDs = boundaryNormalPatchesSet.toc();
+
+  Info << "Boundary normal patch IDs: " << boundaryNormalPatchesIDs << endl;
+
+
+  // Collect points belonging to multiple patches
+  labelList pointsInMultiplePatches;
+
+  forAll(patchCount, ptI)
+  {
+      if (patchCount[ptI] > 1)
+      {
+          pointsInMultiplePatches.append(ptI);
+          // Info << "Point " << ptI << " appears in "
+          //      << patchCount[ptI] << " patches. It will not be moved.\n";
+      }
+  }
+
+  // // Before starting iterations, we want to find the points that are present in two or more patches
+  // // These points will not be moved at all
+  // labelList pointsInMultiplePatches;
+  //
+  // Info << "Checking for points present in multiple patches..." << endl;
+  // forAll(mesh.points(), pointI)
+  // {
+  //   label numberOfPatchesContainingPoint = 0;
+  //   forAll(mesh.boundaryMesh(), patchI)
+  //   {
+  //     polyPatch pp = mesh.boundaryMesh()[patchI];
+  //     // Check if the point is in a patch
+  //     if (pp.whichPoint(pointI) != -1)
+  //     {
+  //       numberOfPatchesContainingPoint++;
+  //     }
+  //   }
+  //   if (numberOfPatchesContainingPoint > 1)
+  //   {
+  //     pointsInMultiplePatches.append(pointI);
+  //     Info << "Point " << pointI << " is present in " << numberOfPatchesContainingPoint << " patches. It will not be moved." << endl;
+  //   }
+  // }
+
+  fvMesh tempFvMesh (mesh);
+  
+
+  volScalarField yCell = wallDist::New(tempFvMesh).y();
+  volVectorField nCell = wallDist::New(tempFvMesh).n();
+
+  // Check size of n and y, and compare against number of points
+
+  int ySize = yCell.internalField().size();
+  int pSize = mesh.points().size();
+  Info << "Size of yCell.internalField(): " << ySize << endl;
+  Info << "Number of mesh points: " << pSize << endl;
+  if (ySize != pSize)
+  {
+    Info << "Size of wallDist y field does not match number of mesh points!" << endl;
+  }
+  // As I thought! y and n are fields for cell center values! Need to interpolate to points!
+  // Lets use the interpolate function in Foam::meshTools
+
+  // volPointInterpolation vpi(tempFvMesh);
+// volPointInterpolation& vpi = volPointInterpolation::New(tempFvMesh)();
+// volPointInterpolation& vpi =
+//     const_cast<volPointInterpolation&>(volPointInterpolation::New(tempFvMesh));
+  // volPointInterpolation& vpi = volPointInterpolation::New(mesh);
+
+
+
+
+  pointScalarField y = volPointInterpolation::New(tempFvMesh).interpolate(yCell);
+  pointVectorField n = volPointInterpolation::New(tempFvMesh).interpolate(nCell);
+
+  // Check size of n and y again
+  int yPointSize = y.internalField().size();
+  if (yPointSize != pSize)
+  {
+    Info << "Size of interpolated wallDist y field does not match number of mesh points!" << endl;
+    exit(1);
+  }
+
+  auto t0 = std::chrono::high_resolution_clock::now();
+
+    PackedBoolList vertOnPatch(mesh.nPoints());
+    PackedBoolList vertOnExcludePatch(mesh.nPoints());
+    labelList wedgePatches;
+
+    // for (const label patchi : mesh.boundaryMesh().patchID())
+    forAll(mesh.boundaryMesh(), patchi)
+    {
+        // Check if patch type is wedge, symmetry, empty or cyclic
+        if (mesh.boundaryMesh()[patchi].type() == "wedge"
+            || mesh.boundaryMesh()[patchi].type() == "symmetry"
+            || mesh.boundaryMesh()[patchi].type() == "empty"
+            || mesh.boundaryMesh()[patchi].type() == "cyclic"
+            )
+        {
+            if (mesh.boundaryMesh()[patchi].type() == "wedge")
+            {
+              wedgePatches.append(patchi);
+            }
+            continue;
+        }
+        const polyPatch& pp = mesh.boundaryMesh()[patchi];
+        const labelList& meshPoints = pp.meshPoints();
+
+        #ifdef OF12
+        if (findIndex(boundaryNormalPatchesIDs, patchi) == -1)
+        #else
+        if (boundaryNormalPatchesIDs.found(patchi))
+        #endif
+        {
+            Info << "Excluding patch " << mesh.boundaryMesh()[patchi].name() << " from boundary normal adjustment." << endl;
+            vertOnExcludePatch.set(meshPoints);
+        }
+
+        vertOnPatch.set(meshPoints);
+
+
+    }
+
+
+
+  pointField newPoints(mesh.points().size());
   for (label iter = 0; iter < iterations; ++iter) {
     Info << "Iteration " << iter + 1 << endl;
-    pointField newPoints(mesh.points().size());
     int movedPoints = 0;
     label constraintCount = 0;
+    double timeFind = 0;
+    double timeNeighSearch = 0;
     /* Info << "preservedBoundaryLayer: " << preserveBoundaryLayer << endl; */
+
+    // Create wallDist:
+    
+    // Need to get the fvMesh to use in wallDist! 
+    // But we only have polyMesh here.
+    // So we create a temporary fvMesh
+    // This is a bit of a hack, but it works for now.
+
 
     // Loop over all points in the mesh
     forAll(mesh.points(), pointI) {
       vector sumOfNeighbours(0, 0, 0);
       label neighbourCount = 0;
 
+      t0 = std::chrono::high_resolution_clock::now();
       labelList neighboringPointIndices = findNeighboringPoints(mesh, pointI);
+      std::chrono::duration<double> elapsed = std::chrono::high_resolution_clock::now() - t0;
+
+      timeNeighSearch += elapsed.count();
 
       forAll(neighboringPointIndices, i)
       {
@@ -358,197 +614,163 @@ int main(int argc, char *argv[]) {
       }
       vector averagePosition = sumOfNeighbours / neighbourCount;
       vector movement = smoothingFactor * (averagePosition - mesh.points()[pointI]);
-      int numberOfClosePatches = 0;
-      label closestBoundaryPoint = -1;
-
-      if (preserveBoundaryLayer == 0)
+      #ifdef OF12
+      if (preserveBoundaryLayer and findIndex(pointsInMultiplePatches, pointI) == -1)
+      #else
+      if (preserveBoundaryLayer and not pointsInMultiplePatches.found(pointI))
+      #endif
       {
-        forAll(mesh.boundaryMesh(), patchI)
+        if (y.internalField()[pointI] <= preserveBoundaryLayer and y.internalField()[pointI] > SMALL)
         {
-          if (preserveBoundaryLayer > 0.0)
+          if (boundaryNormalFreq == 0)
           {
-            closestBoundaryPoint = getClosestBoundaryPoint(mesh, pointI, preserveBoundaryLayer, patchI);
-          } else {
-            // Check if the point is in a patch
-            closestBoundaryPoint = -1;
-            forAll(mesh.boundaryMesh()[patchI], faceI)
+            // With no forced boundary normals, we should remove ALL movement close to the boundary:
+            movement *= min(1, y[pointI]/preserveBoundaryLayer);
+          }
+          else
+          {
+          movement -= (movement & n.internalField()[pointI]) * n.internalField()[pointI] * min(1, 1 - mag(y[pointI]/preserveBoundaryLayer));
+          }
+        }
+      }
+      movedPoints++;
+      constraintCount++;
+      #ifdef OF12
+      if (findIndex(pointsInMultiplePatches, pointI) != -1)
+      #else
+      t0 = std::chrono::high_resolution_clock::now();
+      pointsInMultiplePatches.found(pointI);
+      elapsed = std::chrono::high_resolution_clock::now() - t0;
+      timeFind += elapsed.count();
+      if (pointsInMultiplePatches.found(pointI))
+      #endif
+      {
+        movement = vector(0, 0, 0);
+        movedPoints--;
+        constraintCount++;
+      }
+      else 
+      {
+        bool isAlreadyConstrained = false;
+        forAll(constrainedNames, i)
+        {
+          if (constrainedPointSets[i]->found(pointI))
+          {
+            constraintCount++;
+            if (constraintTypes[i] == "yconst")
             {
-              face currentFace = mesh.boundaryMesh()[patchI][faceI];
-              if (currentFace.found(pointI))
+              movement.y() = constraintValues[i] - mesh.points()[pointI].y();
+              constraintCount++;
+              if (isAlreadyConstrained)
               {
-                /* Info << "Found a point on a boundary patch!" << endl; */
-                closestBoundaryPoint = pointI;
-                break;
+                movement = vector(0, 0, 0);
+              }
+              /* isAlreadyConstrained = true; */
+            }
+            if (constraintTypes[i] == "sphere")
+            {
+              point onSphere = projectPointOntoSphere(mesh.points()[pointI] + movement, constraintValues[i]);
+              movement = onSphere - mesh.points()[pointI];
+              constraintCount++;
+              if (isAlreadyConstrained)
+              {
+                movement = vector(0, 0, 0);
+              }
+              /* isAlreadyConstrained = true; */
+            }
+
+            if (constraintTypes[i] == "constX")
+            {
+              movement.x() = 0;
+                /* isAlreadyConstrained = true; */
+            }
+            if (constraintTypes[i] == "constY")
+            {
+              movement.y() = 0;
+                isAlreadyConstrained = true;
+            }
+            if (constraintTypes[i] == "constZ")
+            {
+              movement.z() = 0;
+                /* isAlreadyConstrained = true; */
+            }
+
+            if (constraintTypes[i] == "constDir")
+            {
+              // Constrain movement of a specific direction
+              /* Info << "Movement before: " << movement << endl; */
+              if (isAlreadyConstrained)
+              {
+                movement = vector(0, 0, 0);
+              }
+              else
+            {
+                // Apply a limiter to make a smooth transition between the constrained and unconstrained movement
+                /* scalar y0 = 0.32; */
+                /* scalar deltay = 0.035; */
+                scalar limiter = 1;
+                // Between y0 plus minus deltay, the movement is constrained, another deltay, the movement constraint
+                // is linearly reduced to zero
+                /* if (constraintDirections[i].y() > 0) */
+                /* { */
+                /*   if (mesh.points()[pointI].y() > y0 - deltay && mesh.points()[pointI].y() < y0 + deltay) */
+                /*   { */
+                /*     limiter = 1; */
+                /*   } */
+                /*   else if (mesh.points()[pointI].y() > y0 + deltay) */
+                /*   { */
+                /*     limiter = 1 - (mesh.points()[pointI].y() - y0 - deltay) / deltay; */
+                /*   } */
+                /*   else */
+                /*   { */
+                /*     limiter = 0; */
+                /*   } */
+                /* } */
+
+                movement -= limiter*(movement & constraintDirections[i]) * constraintDirections[i];
+                /* isAlreadyConstrained = true; */
+              }
+              /* Info << "Movement after: " << movement << endl; */
+            }
+
+            if (constraintTypes[i] == "constRadiusXY")
+            {
+              if (isAlreadyConstrained)
+              {
+                movement = vector(0, 0, 0);
+              }
+              else
+            {
+                /* vector radialUnitVector = mesh.points()[pointI] / mag(mesh.points()[pointI]); */
+                /* vector radialMovement = (movement & radialUnitVector) * radialUnitVector; */
+                /* movement -= radialMovement; */
+                // New method. Project the point onto a sphere with the given radius, and then calculate the movement
+                scalar oldRadiusXY = mag(vector(mesh.points()[pointI].x(), mesh.points()[pointI].y(), 0));
+                scalar newRadiusXY = mag(vector(mesh.points()[pointI].x() + movement.x(), mesh.points()[pointI].y() + movement.y(), 0));
+                scalar scaleFactor = oldRadiusXY / newRadiusXY;
+                vector projectedPoint = vector(mesh.points()[pointI].x() + movement.x(), mesh.points()[pointI].y() + movement.y(), 0) * scaleFactor;
+                movement.x() = projectedPoint.x() - mesh.points()[pointI].x();
+                movement.y() = projectedPoint.y() - mesh.points()[pointI].y();
+
+                
+                /* isAlreadyConstrained = true; */
+
               }
             }
-          }
 
-          if (closestBoundaryPoint != -1)
-          {
-            vector distance = mesh.points()[closestBoundaryPoint] - mesh.points()[pointI];
-            /* Info << "Distance to boundary: " << mag(distance) << endl; */
-            if (mag(distance) <= preserveBoundaryLayer)
+            if (constraintTypes[i] == "fixed")
             {
-              numberOfClosePatches++;
-              vector boundaryNormal = getBoundaryNormal(mesh, closestBoundaryPoint);
-              vector parallelComponent = (movement & boundaryNormal) * boundaryNormal;
-              movement-= parallelComponent;
-              /* Info << "Constrained movement to boundary normal." << endl; */
+              movement = vector(0, 0, 0);
+              isAlreadyConstrained = true;
+              movedPoints--;
             }
           }
-          /* else */
-          /* { */
-          /*   movement = vector(0, 0, 0); */
-          /*   movedPoints--; */
-          /*   constraintCount++; */
-          /* } */
         }
         movedPoints++;
-        constraintCount++;
-        if (numberOfClosePatches > 1){
-          /* Info << "Found a point which is close to two patches! Not moving at all." << endl; */
-          movement = vector(0, 0, 0);
-          movedPoints--;
-        }
       }
-      /* label closestBoundaryPoint = getClosestBoundaryPoint(mesh, pointI, preserveBoundaryLayer); */
-      /* if (closestBoundaryPoint != -1) */
-      /* { */
-      /*   vector distance = mesh.points()[closestBoundaryPoint] - mesh.points()[pointI]; */
-      /*     vector boundaryNormal = getBoundaryNormal(mesh, closestBoundaryPoint); */
-      /*     vector parallelComponent = (movement & boundaryNormal) * boundaryNormal; */
-      /*     scalar x = mag(distance); */
-      /*     scalar y = 8/7 - x/(7*preserveBoundaryLayer);  //x/(3*preserveBoundaryLayer) - 1/3; */
-      /*   // TODO: Restrict movement in two directions for points close to the boundary */
-      /*     movement-= parallelComponent*min(1,max(0, y)); */
-      /*     movedPoints++; */
-      /*     constraintCount++; */
-      /* } */
-      /* else */
-      /* { */
-      /*   movement = vector(0, 0, 0); */
-      /*   movedPoints--; */
-      /*   constraintCount++; */
-      /* } */
 
-      bool isAlreadyConstrained = false;
-      forAll(constrainedNames, i)
-      {
-        if (constrainedPointSets[i]->found(pointI))
-        {
-          constraintCount++;
-          if (constraintTypes[i] == "yconst")
-          {
-            movement.y() = constraintValues[i] - mesh.points()[pointI].y();
-            constraintCount++;
-            if (isAlreadyConstrained)
-            {
-              movement = vector(0, 0, 0);
-            }
-            /* isAlreadyConstrained = true; */
-          }
-          if (constraintTypes[i] == "sphere")
-          {
-            point onSphere = projectPointOntoSphere(mesh.points()[pointI] + movement, constraintValues[i]);
-            movement = onSphere - mesh.points()[pointI];
-            constraintCount++;
-            if (isAlreadyConstrained)
-            {
-              movement = vector(0, 0, 0);
-            }
-            /* isAlreadyConstrained = true; */
-          }
-
-          if (constraintTypes[i] == "constX")
-          {
-            movement.x() = 0;
-              /* isAlreadyConstrained = true; */
-          }
-          if (constraintTypes[i] == "constY")
-          {
-            movement.y() = 0;
-              isAlreadyConstrained = true;
-          }
-          if (constraintTypes[i] == "constZ")
-          {
-            movement.z() = 0;
-              /* isAlreadyConstrained = true; */
-          }
-
-          if (constraintTypes[i] == "constDir")
-          {
-            // Constrain movement of a specific direction
-            /* Info << "Movement before: " << movement << endl; */
-            if (isAlreadyConstrained)
-            {
-              movement = vector(0, 0, 0);
-            }
-            else
-          {
-              // Apply a limiter to make a smooth transition between the constrained and unconstrained movement
-              /* scalar y0 = 0.32; */
-              /* scalar deltay = 0.035; */
-              scalar limiter = 1;
-              // Between y0 plus minus deltay, the movement is constrained, another deltay, the movement constraint
-              // is linearly reduced to zero
-              /* if (constraintDirections[i].y() > 0) */
-              /* { */
-              /*   if (mesh.points()[pointI].y() > y0 - deltay && mesh.points()[pointI].y() < y0 + deltay) */
-              /*   { */
-              /*     limiter = 1; */
-              /*   } */
-              /*   else if (mesh.points()[pointI].y() > y0 + deltay) */
-              /*   { */
-              /*     limiter = 1 - (mesh.points()[pointI].y() - y0 - deltay) / deltay; */
-              /*   } */
-              /*   else */
-              /*   { */
-              /*     limiter = 0; */
-              /*   } */
-              /* } */
-
-              movement -= limiter*(movement & constraintDirections[i]) * constraintDirections[i];
-              /* isAlreadyConstrained = true; */
-            }
-            /* Info << "Movement after: " << movement << endl; */
-          }
-
-          if (constraintTypes[i] == "constRadiusXY")
-          {
-            if (isAlreadyConstrained)
-            {
-              movement = vector(0, 0, 0);
-            }
-            else
-          {
-              /* vector radialUnitVector = mesh.points()[pointI] / mag(mesh.points()[pointI]); */
-              /* vector radialMovement = (movement & radialUnitVector) * radialUnitVector; */
-              /* movement -= radialMovement; */
-              // New method. Project the point onto a sphere with the given radius, and then calculate the movement
-              scalar oldRadiusXY = mag(vector(mesh.points()[pointI].x(), mesh.points()[pointI].y(), 0));
-              scalar newRadiusXY = mag(vector(mesh.points()[pointI].x() + movement.x(), mesh.points()[pointI].y() + movement.y(), 0));
-              scalar scaleFactor = oldRadiusXY / newRadiusXY;
-              vector projectedPoint = vector(mesh.points()[pointI].x() + movement.x(), mesh.points()[pointI].y() + movement.y(), 0) * scaleFactor;
-              movement.x() = projectedPoint.x() - mesh.points()[pointI].x();
-              movement.y() = projectedPoint.y() - mesh.points()[pointI].y();
-
-              
-              /* isAlreadyConstrained = true; */
-
-            }
-          }
-
-          if (constraintTypes[i] == "fixed")
-          {
-            movement = vector(0, 0, 0);
-            isAlreadyConstrained = true;
-            movedPoints--;
-          }
-        }
-      }
 
       newPoints[pointI] = mesh.points()[pointI] + movement;
-      movedPoints++;
 
     }
 
@@ -556,7 +778,129 @@ int main(int argc, char *argv[]) {
     Info << "Moved " << movedPoints << " points." << endl;
     Info << "Constrained " << constraintCount << " points." << endl;
     mesh.movePoints(newPoints);
+
+    Info << "Time spent in neighbor search: "
+       << timeNeighSearch
+       << " seconds." << endl;
+    Info << "Time spent in find search: "
+       << timeFind
+       << " seconds." << endl;
+    //
+    // Adjust the points on the patches to be orthogonal to the internal points
+    if ( boundaryNormalFreq > 0 and (iter + 1) % boundaryNormalFreq == 0 )
+    {
+        Info << "\nAdjusting boundary points to be orthogonal to internal points..." << endl;
+        // Info << "Adjusting boundary points to be orthogonal to internal points." << endl;
+      forAllConstIter(labelHashSet, boundaryNormalPatchesSet, iter)
+      {
+          label patchi = iter.key();
+          // Info << "Adjusting points on patch " << mesh.boundaryMesh()[patchi].name() << endl;
+          const polyPatch& pp = mesh.boundaryMesh()[patchi];
+          const labelList& meshPoints = pp.meshPoints();
+
+          for (const label meshPointi : meshPoints)
+          {
+
+              // Skip points on excluded patches
+              if (vertOnExcludePatch[meshPointi])
+              {
+                 // Info << "Skipping point " << meshPointi << " on excluded patch" << endl;
+                 continue;
+               }
+
+              const point& boundaryPoint = mesh.points()[meshPointi];
+              const label localPointI = pp.whichPoint(meshPointi);
+              // Info << "  Adjusting point " << meshPointi << ": " << boundaryPoint << endl;
+              
+              // Get the list of points connected to the boundary point
+              const labelList& pPoints = mesh.pointPoints()[meshPointi];
+
+              // Find the point that is not on the boundary if there is one
+              label internalPointi = -1;
+              for (const label pPointi : pPoints)
+              {
+                  // Info << "    Checking point " << pPointi << endl;
+                  if (!vertOnPatch[pPointi])
+                  // Info << "       whichPoint: " << pp.whichPoint(pPointi) << endl;
+                  // if (pp.whichPoint(pPointi) == -1)
+                  {
+                      // Info << "    Found internal point " << pPointi << endl;
+                      internalPointi = pPointi;
+                      break;
+                  }
+              }
+              
+              if (internalPointi < 0)
+              {
+                      // Info << "No internal point found for boundary point " << meshPointi << endl;    
+                      // Info << "   coords: " << boundaryPoint << endl;
+                      continue;
+              }
+              else
+              {
+
+                  // Calculate the patch normal at the boundary point, by taking the average of the normals of the faces connected to the point
+                  vector boundaryNormal = vector::zero;
+                  const labelList& faces = pp.pointFaces()[localPointI];
+                  /* const auto faces = pp.pointFaces(); */
+                  /* const auto faces = pp.localFaces(); */
+                  // Info << "    Faces: " << faces << endl;
+                  for (const label facei : faces)
+                  {
+                      /* Info << "    Face " << facei << ": " << faces[facei] << endl; */
+                      const vector& faceNormal = pp.faceNormals()[facei];
+                      boundaryNormal += faceNormal;
+                  }
+                  // boundaryNormal.normalise();
+                  boundaryNormal /= mag(boundaryNormal);
+
+
+                  // For now, assumes that the desired normal is (0,-1,0)
+                  /* vector boundaryNormal = vector(0, -1, 0); */
+                  vector internalPoint = mesh.points()[internalPointi];
+                  vector internalToBoundary = boundaryPoint - internalPoint;
+                  vector movement = internalToBoundary - dot(internalToBoundary, boundaryNormal) * boundaryNormal;
+                  /* point newPoint = internalPoint + internalToBoundary - dot(internalToBoundary, boundaryNormal) * boundaryNormal; */
+
+                  /* mesh.points()[meshPointi] = newPoint; */
+                  newPoints[meshPointi] = mesh.points()[meshPointi] - movement;
+              }
+
+              
+          }
+      }
+    }
   }
+  forAll(wedgePatches, wpi)
+  {
+    label patchi = wedgePatches[wpi];
+    Info << "Constraining wedge patch " << patchi << endl;
+    // forAll(newPoints, npointi)
+    // {
+      // Check if npointi is in the wedge patch:
+      // if (mesh.boundaryMesh()[patchi].meshPoints().found(npointi))
+      // if (findIndex(mesh.boundaryMesh()[patchi].meshPoints(), npointi))
+      const wedgePolyPatch& wpp = refCast<const wedgePolyPatch>(mesh.boundaryMesh()[patchi]);
+      const vector n_ = wpp.n();          // wedge normal direction
+      forAll(wpp.meshPoints(), wpi)
+      {
+        label pointi = wpp.meshPoints()[wpi];
+        // const vector a_ = wpp.axis();       // wedge axis
+        // scalar cosAngle = wpp.cosAngle();   // cos of wedge angle
+
+        // Project new point in the n direction such that the angle with the axis is the same as the wedge:
+        vector pointRel = newPoints[pointi] - mesh.points()[pointi];
+
+        // Remove the component in the normal direction
+
+        vector pointRel_n = (pointRel & n_) * n_;
+
+        // Update the new point:
+        newPoints[pointi] -= pointRel_n;
+
+      }
+    }
+    mesh.movePoints(newPoints);
 
   if (!overwrite) {
     ++runTime;
@@ -566,7 +910,11 @@ int main(int argc, char *argv[]) {
 
   // Write resulting smoothed mesh
   if (Pstream::master()) {
+    #ifdef OF12
+    Info << "Writing smoothed mesh to time " << runTime.name() << endl;
+    #else
     Info << "Writing smoothed mesh to time " << runTime.timeName() << endl;
+    #endif
     mesh.write();
   }
 

@@ -19,27 +19,36 @@ FoamFile
 
 // Prevent moving points in the boundary normal direction, for points a distance from the boundaries.
 // Not working properly. Instead, refineWallLayer is used after smoothing.
-preserveBoundaryLayer 0; //#eval {10*$wall_cell_size}; 
-iters 15;
-smoothFactor 1;
+preserveBoundaryLayer 10e-3; //#eval {10*$wall_cell_size}; 
+iters 3;
+smoothFactor 2;
+boundaryNormalFreq 1;
+boundaryNormalPatches ("gas_to_.*" outlet pipe);
 
 constrainedPoints
 (
   {
-    set wallSmoothPoints;
-    constraintType sphere;
-    value $R;
-  }
-  {
-    set bottomSmoothPoints;
-    constraintType yconst;
-    value #eval {$R - $H_G};
-  }
-  {
-    set fixedPoints;
+    type patch;
+    patch gas_to_liquid;
     constraintType fixed;
+    // value #eval {$R - $H_G};
+  }
+  {
+    type patch;
+    patch gas_to_metal;
+    constraintType fixed;
+  }
+  {
+    type patch;
+    patch wedgePos;
+    constraintType constDir;
+    direction (-0.00872654  0  0.999962);
+  }
+  {
+    type patch;
+    patch wedgeNeg;
+    constraintType constDir;
+    direction (-0.00872654  0  -0.999962);
   }
 );
 
-
-// ************************************************************************* //
