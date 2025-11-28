@@ -640,7 +640,6 @@ int main(int argc, char *argv[]) {
   }
   forAll(wedgePatches, wpi) {
     label patchi = wedgePatches[wpi];
-    scalar cosAngle = cosAngleWedge[wpi];
     Info << "Constraining wedge patch " << patchi << endl;
     const wedgePolyPatch &wpp =
         refCast<const wedgePolyPatch>(mesh.boundaryMesh()[patchi]);
