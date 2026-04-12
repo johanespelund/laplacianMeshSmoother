@@ -27,5 +27,4 @@ jobs:
           sudo apt-get install -y openfoam12
 
       - name: Compile with wmake
-        shell: bash
-        run: source /opt/openfoam12/etc/bashrc && wmake
+        run: bash -c "source /opt/openfoam12/etc/bashrc && wmake"
