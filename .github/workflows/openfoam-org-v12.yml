@@ -24,9 +24,6 @@ jobs:
      - name: Compile with wmake
        working-directory: ${{ github.workspace }}
        run: |
-          bash -lc
-            set -eo pipefail
-      
             if [ -f /opt/openfoam12/etc/bashrc ]; then
               source /opt/openfoam12/etc/bashrc
             elif [ -f /usr/lib/openfoam/openfoam12/etc/bashrc ]; then
