@@ -19,6 +19,7 @@ jobs:
 
       - name: Install OpenFOAM.org v12
         run: |
+          set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y software-properties-common wget gnupg
           wget -qO - https://dl.openfoam.org/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/openfoam.gpg
