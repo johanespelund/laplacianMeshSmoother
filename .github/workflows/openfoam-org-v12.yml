@@ -31,5 +31,8 @@ jobs:
             echo "OpenFOAM v12 environment script not found in container"
             exit 1
           fi
-          test "${WM_PROJECT_VERSION}" = "12"
+          test "${WM_PROJECT_VERSION}" = "12" || {
+            echo "Expected OpenFOAM version 12, got '${WM_PROJECT_VERSION}'"
+            exit 1
+          }
           wmake
