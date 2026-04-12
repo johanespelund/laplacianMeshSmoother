@@ -235,7 +235,13 @@ int main(int argc, char *argv[]) {
 #endif
         Info << " patch: " << patchName << endl;
 
-        const label patchID = mesh.boundaryMesh().findPatchID(patchName);
+        label patchID = -1;
+        forAll(mesh.boundaryMesh(), patchi) {
+          if (mesh.boundaryMesh()[patchi].name() == patchName) {
+            patchID = patchi;
+            break;
+          }
+        }
         if (patchID < 0) {
           WarningInFunction << "Patch '" << patchName
                             << "' not found. Skipping constrained patch entry."

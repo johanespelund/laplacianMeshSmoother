@@ -2,7 +2,13 @@
 An OpenFOAM utility to use laplacian smoothing. **WIP!**
 
 ## Installation
-Tested using OpenFOAM v2206
+Tested using OpenFOAM v2206.
+
+## OpenFOAM version notes
+- OpenFOAM.com and OpenFOAM.org use different APIs in some places.
+- This codebase includes conditional handling for both flavors.
+- `laplacianMeshSmoother.C` currently has `#define ORG_VERSION` enabled by default.
+
 Clone repo and run `wmake`. The executable will be located in `$FOAM_USER_APPBIN` and can be called with `laplacianMeshSmoother` when OpenFOAM is loaded.
 
 TODO:
