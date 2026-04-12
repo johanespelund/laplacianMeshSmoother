@@ -4,6 +4,57 @@ An OpenFOAM utility to use laplacian smoothing. **WIP!**
 ## Installation
 Tested using OpenFOAM v2206.
 
+## Usage
+
+```cpp
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.1.0                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      laplacianSmoothDict;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Prevent moving points in the boundary normal direction, for points a distance from the boundaries.
+// Not working properly. Instead, refineWallLayer is used after smoothing.
+preserveBoundaryLayer #calc "$t_BL / 2"; //#eval {10*$wall_cell_size}; 
+iters 20;
+smoothFactor 0.8;
+boundaryNormalFreq 0;
+boundaryNormalPatches ("wall_.*" );
+
+constrainedPoints
+(
+  {
+    type patch;
+    patch wall;
+    constraintType fixed;
+  }
+
+  {
+    type patch;
+    patch wedgePos;
+    constraintType constDir;
+    direction (-0.00872654  0  0.999962);
+  }
+  {
+    type patch;
+    patch wedgeNeg;
+    constraintType constDir;
+    direction (-0.00872654  0  -0.999962);
+  }
+);
+```
+
 ## OpenFOAM version notes
 - OpenFOAM.com and OpenFOAM.org use different APIs in some places.
 - This codebase includes conditional handling for both flavors.
