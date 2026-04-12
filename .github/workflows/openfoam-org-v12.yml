@@ -29,4 +29,4 @@ jobs:
 
       - name: Compile with wmake
         working-directory: ${{ github.workspace }}
-        run: bash -c "source /opt/openfoam12/etc/bashrc && wmake"
+        run: bash -c "set -euxo pipefail; source /opt/openfoam12/etc/bashrc && wmake"
