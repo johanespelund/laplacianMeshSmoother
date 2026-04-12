@@ -24,9 +24,9 @@ jobs:
         run: |
           set -eux pipefail
           if [ -f /opt/openfoam12/etc/bashrc ]; then
-            source /opt/openfoam12/etc/bashrc
+            . /opt/openfoam12/etc/bashrc
           elif [ -f /usr/lib/openfoam/openfoam12/etc/bashrc ]; then
-            source /usr/lib/openfoam/openfoam12/etc/bashrc
+            . /usr/lib/openfoam/openfoam12/etc/bashrc
           else
             echo "OpenFOAM v12 environment script not found in container"
             exit 1
