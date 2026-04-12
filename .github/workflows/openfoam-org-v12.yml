@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-22.04
@@ -18,8 +21,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y software-properties-common wget gnupg
-          wget -qO - https://dl.openfoam.org/gpg.key | sudo apt-key add -
-          sudo add-apt-repository -y http://dl.openfoam.org/ubuntu
+          wget -qO - https://dl.openfoam.org/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/openfoam.gpg
+          echo "deb [signed-by=/usr/share/keyrings/openfoam.gpg] http://dl.openfoam.org/ubuntu $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/openfoam.list
           sudo apt-get update
           sudo apt-get install -y openfoam12
 
