@@ -208,7 +208,6 @@ int main(int argc, char *argv[]) {
   List<dictionary> constrainedPointsDict(dict.lookup("constrainedPoints"));
 
   List<word> constrainedNames;
-  List<word> constrainedPatchNames;
   List<pointSet *> constrainedPointSets;
   List<word> constraintTypes;
   List<scalar> constraintValues;
@@ -219,9 +218,6 @@ int main(int argc, char *argv[]) {
 
     pointSet *ps = nullptr;
 
-    Info << "Checking for type entry in dictionary..." << endl;
-
-    // Read the "type" entry from the dictionary
     if (!constrainedDict.found("type")) {
       FatalErrorInFunction << "Missing 'type' entry in dictionary" << endl;
     } else {
@@ -238,14 +234,24 @@ int main(int argc, char *argv[]) {
         word patchName = constrainedDict.get<word>("patch");
 #endif
         Info << " patch: " << patchName << endl;
+
+        const label patchID = mesh.boundaryMesh().findPatchID(patchName);
+        if (patchID < 0) {
+          WarningInFunction << "Patch '" << patchName
+                            << "' not found. Skipping constrained patch entry."
+                            << endl;
+          continue;
+        }
+
+        const polyPatch &patch = mesh.boundaryMesh()[patchID];
         constrainedNames.append(patchName);
         ps = new pointSet(mesh, patchName, 0);
-        forAll(mesh.boundaryMesh()[patchName], faceI) {
-          face currentFace = mesh.boundaryMesh()[patchName][faceI];
+        forAll(patch, faceI) {
+          const face &currentFace = patch[faceI];
           forAll(currentFace, pointI) { ps->insert(currentFace[pointI]); }
         }
         Info << "Constraining points in patch " << patchName << " with "
-             << ps->size() << " poinst." << endl;
+             << ps->size() << " points." << endl;
       } else {
 #ifdef ORG_VERSION
         word pointSetName = constrainedDict.lookup("set");
@@ -255,7 +261,7 @@ int main(int argc, char *argv[]) {
         constrainedNames.append(pointSetName);
         ps = new pointSet(mesh, pointSetName);
         Info << "Constraining points in set " << pointSetName << " with "
-             << ps->size() << " poinst." << endl;
+             << ps->size() << " points." << endl;
       }
     }
 
