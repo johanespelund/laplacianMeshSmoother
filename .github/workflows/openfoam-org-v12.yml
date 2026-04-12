@@ -27,4 +27,5 @@ jobs:
           sudo apt-get install -y openfoam12
 
       - name: Compile with wmake
+        working-directory: ${{ github.workspace }}
         run: bash -c "source /opt/openfoam12/etc/bashrc && wmake"
