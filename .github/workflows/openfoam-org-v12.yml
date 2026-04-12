@@ -12,21 +12,24 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    container:
+      image: microfluidica/openfoam:12
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install OpenFOAM.org v12
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y software-properties-common wget gnupg
-          wget -qO - https://dl.openfoam.org/gpg.key | sudo gpg --dearmor -o /usr/share/keyrings/openfoam.gpg
-          echo "deb [signed-by=/usr/share/keyrings/openfoam.gpg] http://dl.openfoam.org/ubuntu $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/openfoam.list
-          sudo apt-get update
-          sudo apt-get install -y openfoam12
-
       - name: Compile with wmake
         working-directory: ${{ github.workspace }}
-        run: bash -c "set -euxo pipefail; source /opt/openfoam12/etc/bashrc && wmake"
+        run: |
+          set -euxo pipefail
+          if [ -f /opt/openfoam12/etc/bashrc ]; then
+            source /opt/openfoam12/etc/bashrc
+          elif [ -f /usr/lib/openfoam/openfoam12/etc/bashrc ]; then
+            source /usr/lib/openfoam/openfoam12/etc/bashrc
+          else
+            echo "OpenFOAM v12 environment script not found in container"
+            exit 1
+          fi
+          test "${WM_PROJECT_VERSION}" = "12"
+          wmake
