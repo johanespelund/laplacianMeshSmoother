@@ -21,37 +21,24 @@ jobs:
         shell: bash
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Compile with wmake
-        working-directory: ${{ github.workspace }}
-        run: |
-          set -eo pipefail
-
-          # Source OpenFOAM environment
-          if [ -f /opt/openfoam12/etc/bashrc ]; then
-            source /opt/openfoam12/etc/bashrc
-          elif [ -f /usr/lib/openfoam/openfoam12/etc/bashrc ]; then
-            source /usr/lib/openfoam/openfoam12/etc/bashrc
-          else
-            echo "OpenFOAM v12 environment script not found in container"
-            exit 1
-          fi
-
-          # Sanity check
-          if [ -z "${WM_PROJECT_VERSION:-}" ]; then
-            echo "OpenFOAM environment variable WM_PROJECT_VERSION is not set"
-            exit 1
-          fi
-
-          echo "Detected OpenFOAM version: ${WM_PROJECT_VERSION}"
-          test "${WM_PROJECT_VERSION}" = "12" || {
-            echo "Expected OpenFOAM version 12, got '${WM_PROJECT_VERSION}'"
-            exit 1
-          }
-
-          foamVersion
-
-          # Compile
-          wmake
+     - name: Compile with wmake
+       working-directory: ${{ github.workspace }}
+       run: |
+          bash -lc '
+            set -eo pipefail
+      
+            if [ -f /opt/openfoam12/etc/bashrc ]; then
+              source /opt/openfoam12/etc/bashrc
+            elif [ -f /usr/lib/openfoam/openfoam12/etc/bashrc ]; then
+              source /usr/lib/openfoam/openfoam12/etc/bashrc
+            else
+              echo "OpenFOAM v12 environment script not found in container"
+              exit 1
+            fi
+      
+            echo "Detected OpenFOAM version: ${WM_PROJECT_VERSION}"
+            test "${WM_PROJECT_VERSION}" = "12"
+      
+            foamVersion
+      
+            wmake
