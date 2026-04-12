@@ -28,6 +28,4 @@ jobs:
 
       - name: Compile with wmake
         shell: bash
-        run: |
-          source /opt/openfoam12/etc/bashrc
-          wmake
+        run: source /opt/openfoam12/etc/bashrc && wmake
