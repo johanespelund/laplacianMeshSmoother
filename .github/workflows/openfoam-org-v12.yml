@@ -18,12 +18,7 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v4
-
-      - name: Set up the environment
-        uses: ./.github/actions/setup-python-env
-        with:
-          python-version: "3.11"
-
+        
       - name: Install system dependencies and OpenFOAM.org v12
         run: |
           sudo apt-get update
