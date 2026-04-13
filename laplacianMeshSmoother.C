@@ -183,9 +183,7 @@ int main(int argc, char *argv[]) {
   Info << "preserveBoundaryLayer: " << preserveBoundaryLayer << endl;
   Info << "boundaryNormalPatches: " << boundaryNormalPatches << endl;
   if (preserveBoundaryLayer > 0.0) {
-    WarningInFunction << "Preserve boundary layer functionality is "
-                         "experimental and may not work as expected."
-                      << endl;
+    Info << "Applying preserveBoundaryLayer movement limiter." << endl;
   }
 
   // Read set construct info from dictionary
@@ -395,19 +393,12 @@ int main(int argc, char *argv[]) {
       vector averagePosition = sumOfNeighbours / neighbourCount;
       vector movement =
           smoothingFactor * (averagePosition - mesh.points()[pointI]);
-      if (preserveBoundaryLayer and !pointsInMultiplePatches[pointI])
-      {
-        if (y.internalField()[pointI] <= preserveBoundaryLayer and
-            y.internalField()[pointI] > SMALL) {
-          if (boundaryNormalFreq == 0) {
-            // With no forced boundary normals, we should remove ALL movement
-            // close to the boundary:
-            movement *= min(1, y[pointI] / preserveBoundaryLayer);
-          } else {
-            movement -= (movement & n.internalField()[pointI]) *
-                        n.internalField()[pointI] *
-                        min(1, 1 - mag(y[pointI] / preserveBoundaryLayer));
-          }
+      if (preserveBoundaryLayer > 0.0 and !pointsInMultiplePatches[pointI]) {
+        const scalar wallDistance = y[pointI];
+        if (wallDistance <= preserveBoundaryLayer) {
+          const scalar movementLimiter = max(
+              scalar(0), min(scalar(1), wallDistance / preserveBoundaryLayer));
+          movement *= movementLimiter;
         }
       }
       movedPoints++;
