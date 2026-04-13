@@ -24,8 +24,9 @@ FoamFile
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
-// Prevent moving points in the boundary normal direction, for points a distance from the boundaries.
-// Not working properly. Instead, refineWallLayer is used after smoothing.
+// Limit movement for points close to boundary patches. The limiter scales linearly
+// with distance from the boundary: 0 distance => zero movement,
+// preserveBoundaryLayer distance => no extra limiting.
 preserveBoundaryLayer #calc "$t_BL / 2"; //#eval {10*$wall_cell_size}; 
 iters 20;
 smoothFactor 0.8;
@@ -59,7 +60,7 @@ constrainedPoints
 
 - `iters`: Number of smoothing iterations.
 - `smoothFactor`: Laplacian movement scaling factor each iteration.
-- `preserveBoundaryLayer`: Distance threshold from walls where normal movement is damped (`0` disables it).
+- `preserveBoundaryLayer`: Distance threshold from boundary patches where movement is linearly limited (`0` disables it). At distance `0` movement is fully blocked, and at `preserveBoundaryLayer` there is no extra limiting.
 - `boundaryNormalFreq`: How often boundary points are corrected to keep better boundary normal alignment (`0` disables this correction).
 - `boundaryNormalPatches`: Patch-name regex list used for boundary-normal correction.
 
