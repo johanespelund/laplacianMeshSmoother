@@ -393,7 +393,7 @@ int main(int argc, char *argv[]) {
       vector averagePosition = sumOfNeighbours / neighbourCount;
       vector movement =
           smoothingFactor * (averagePosition - mesh.points()[pointI]);
-      if (preserveBoundaryLayer > 0 and !pointsInMultiplePatches[pointI]) {
+      if (preserveBoundaryLayer > 0 && !pointsInMultiplePatches[pointI]) {
         const scalar wallDistance = y[pointI];
         if (wallDistance <= preserveBoundaryLayer) {
           const scalar movementLimiter = max(
