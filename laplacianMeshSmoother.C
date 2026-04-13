@@ -52,6 +52,7 @@ Description
 #include "pointSet.H"
 #include "polyMesh.H"
 #include "polyTopoChange.H"
+#include "primitivePatch.H"
 #include "topoSet.H"
 #include "volPointInterpolation.H"
 #include "wallDist.H"
@@ -73,15 +74,11 @@ using namespace Foam;
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #include "pointField.H"
-#include "polyMesh.H"
-#include "primitivePatch.H"
-
-using namespace Foam;
 
 // Function to project a point onto a sphere
-point projectPointOntoSphere(const vector &point, double radius) {
+point projectPointOntoSphere(const vector &point, scalar radius) {
   // Calculate the magnitude of the point vector
-  double magnitude = mag(point);
+  scalar magnitude = mag(point);
 
   // Normalize the point vector to get the direction
   vector direction = point / magnitude;
@@ -89,19 +86,6 @@ point projectPointOntoSphere(const vector &point, double radius) {
   // Scale the direction vector by the radius to get the coordinates of the
   // projected point
   vector projectedPoint = direction * radius;
-
-  return projectedPoint;
-}
-
-point projectPointOntoZCylinder(const vector &point, double radius) {
-  // Project a point onto a circli in the xy-plane, keep z-coordinate
-  vector projectedPoint = point;
-  projectedPoint.z() = 0;
-  scalar currentRadius = mag(projectedPoint);
-  scalar scaleFactor = radius / currentRadius;
-  projectedPoint.x() *= scaleFactor;
-  projectedPoint.y() *= scaleFactor;
-  projectedPoint.z() = point.z();
 
   return projectedPoint;
 }
@@ -333,12 +317,12 @@ int main(int argc, char *argv[]) {
 
   Info << "Boundary normal patch IDs: " << boundaryNormalPatchesIDs << endl;
 
-  // Collect points belonging to multiple patches
-  labelList pointsInMultiplePatches;
+  // Mark points belonging to multiple patches
+  PackedBoolList pointsInMultiplePatches(nPoints);
 
   forAll(patchCount, ptI) {
     if (patchCount[ptI] > 1) {
-      pointsInMultiplePatches.append(ptI);
+      pointsInMultiplePatches.set(ptI);
     }
   }
 
@@ -374,11 +358,7 @@ int main(int argc, char *argv[]) {
     const polyPatch &pp = mesh.boundaryMesh()[patchi];
     const labelList &meshPoints = pp.meshPoints();
 
-#ifdef ORG_VERSION
-    if (findIndex(boundaryNormalPatchesIDs, patchi) == -1)
-#else
-    if (boundaryNormalPatchesIDs.found(patchi))
-#endif
+    if (!boundaryNormalPatchesSet.found(patchi))
     {
       Info << "Excluding patch " << mesh.boundaryMesh()[patchi].name()
            << " from boundary normal adjustment." << endl;
@@ -386,6 +366,11 @@ int main(int argc, char *argv[]) {
     }
 
     vertOnPatch.set(meshPoints);
+  }
+
+  List<labelList> pointNeighbours(mesh.nPoints());
+  forAll(pointNeighbours, pointI) {
+    pointNeighbours[pointI] = findNeighboringPoints(mesh, pointI);
   }
 
   pointField newPoints(mesh.points().size());
@@ -401,7 +386,7 @@ int main(int argc, char *argv[]) {
       vector sumOfNeighbours(0, 0, 0);
       label neighbourCount = 0;
 
-      labelList neighboringPointIndices = findNeighboringPoints(mesh, pointI);
+      const labelList &neighboringPointIndices = pointNeighbours[pointI];
 
       forAll(neighboringPointIndices, i) {
         sumOfNeighbours += mesh.points()[neighboringPointIndices[i]];
@@ -410,12 +395,7 @@ int main(int argc, char *argv[]) {
       vector averagePosition = sumOfNeighbours / neighbourCount;
       vector movement =
           smoothingFactor * (averagePosition - mesh.points()[pointI]);
-#ifdef ORG_VERSION
-      if (preserveBoundaryLayer and
-          findIndex(pointsInMultiplePatches, pointI) == -1)
-#else
-      if (preserveBoundaryLayer and not pointsInMultiplePatches.found(pointI))
-#endif
+      if (preserveBoundaryLayer and !pointsInMultiplePatches[pointI])
       {
         if (y.internalField()[pointI] <= preserveBoundaryLayer and
             y.internalField()[pointI] > SMALL) {
@@ -432,11 +412,7 @@ int main(int argc, char *argv[]) {
       }
       movedPoints++;
       constraintCount++;
-#ifdef ORG_VERSION
-      if (findIndex(pointsInMultiplePatches, pointI) != -1)
-#else
-      if (pointsInMultiplePatches.found(pointI))
-#endif
+      if (pointsInMultiplePatches[pointI])
       {
         movement = vector(0, 0, 0);
         movedPoints--;
