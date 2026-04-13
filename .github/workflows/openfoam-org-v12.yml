@@ -1,41 +1,43 @@
-name: OpenFOAM.org v12 compile
+name: Main
 
 on:
   push:
     branches:
       - main
   pull_request:
-
-permissions:
-  contents: read
+    types: [opened, synchronize, reopened, ready_for_review]
 
 jobs:
-  build:
+  tests-openfoam-org-v12:
     runs-on: ubuntu-22.04
-
-    container:
-      image: microfluidica/openfoam:12
-
+    permissions:
+      contents: read
     defaults:
       run:
         shell: bash
-
     steps:
-     - name: Compile with wmake
-       working-directory: ${{ github.workspace }}
-       run: |
-            if [ -f /opt/openfoam12/etc/bashrc ]; then
-              source /opt/openfoam12/etc/bashrc
-            elif [ -f /usr/lib/openfoam/openfoam12/etc/bashrc ]; then
-              source /usr/lib/openfoam/openfoam12/etc/bashrc
-            else
-              echo "OpenFOAM v12 environment script not found in container"
-              exit 1
-            fi
-      
-            echo "Detected OpenFOAM version: ${WM_PROJECT_VERSION}"
-            test "${WM_PROJECT_VERSION}" = "12"
-      
-            foamVersion
-      
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up the environment
+        uses: ./.github/actions/setup-python-env
+        with:
+          python-version: "3.11"
+
+      - name: Install system dependencies and OpenFOAM.org v12
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates gnupg wget software-properties-common libglu1-mesa
+          wget -O - https://dl.openfoam.org/gpg.key | gpg --dearmor | sudo tee /usr/share/keyrings/openfoam.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/openfoam.gpg] http://dl.openfoam.org/ubuntu jammy main" \
+            | sudo tee /etc/apt/sources.list.d/openfoam.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y openfoam12
+
+      - name: Run tests with OpenFOAM.org v12
+        shell: bash
+        run: |
+          bash -lc '
+            source /opt/openfoam12/etc/bashrc
             wmake
+          '
