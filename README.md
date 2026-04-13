@@ -55,6 +55,28 @@ constrainedPoints
 );
 ```
 
+### Dictionary field explanation (`laplacianSmoothDict`)
+
+- `iters`: Number of smoothing iterations.
+- `smoothFactor`: Laplacian movement scaling factor each iteration.
+- `preserveBoundaryLayer`: Distance threshold from walls where normal movement is damped (`0` disables it).
+- `boundaryNormalFreq`: How often boundary points are corrected to keep better boundary normal alignment (`0` disables this correction).
+- `boundaryNormalPatches`: Patch-name regex list used for boundary-normal correction.
+
+#### `constrainedPoints` entries
+
+Each entry targets either:
+- `type patch; patch <patchName>;` for points on a boundary patch, or
+- `type set; set <pointSetName>;` for a pointSet.
+
+Supported `constraintType` values in this utility:
+- `fixed`: no movement.
+- `constDir`: remove motion along `direction`.
+- `constX`, `constY`, `constZ`: remove motion in that Cartesian direction.
+- `yconst`: force y-coordinate to `value`.
+- `sphere`: project to sphere radius `value`.
+- `constRadiusXY`: keep XY-radius constant.
+
 ## OpenFOAM version notes
 - OpenFOAM.com and OpenFOAM.org use different APIs in some places.
 - This codebase includes conditional handling for both flavors.
