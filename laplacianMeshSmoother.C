@@ -76,9 +76,9 @@ using namespace Foam;
 #include "pointField.H"
 
 // Function to project a point onto a sphere
-point projectPointOntoSphere(const vector &point, double radius) {
+point projectPointOntoSphere(const vector &point, scalar radius) {
   // Calculate the magnitude of the point vector
-  double magnitude = mag(point);
+  scalar magnitude = mag(point);
 
   // Normalize the point vector to get the direction
   vector direction = point / magnitude;
