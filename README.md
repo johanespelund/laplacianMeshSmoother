@@ -62,7 +62,7 @@ constrainedPoints
 - `iters`: Number of smoothing iterations.
 - `smoothFactor`: Laplacian movement scaling factor each iteration.
 - `preserveBoundaryLayer`: Distance threshold from boundary patches where movement is linearly limited (`0` disables it). At distance `0` movement is fully blocked, and at `preserveBoundaryLayer` movement is unaffected by this limiter.
-- `boundaryNormalFreq`: How often boundary points are corrected to keep better boundary normal alignment (`0` disables this correction).
+- `boundaryNormalFreq`: How often internal points next to selected boundary patches are corrected (with boundary points kept fixed) to improve boundary normal alignment (`0` disables this correction).
 - `boundaryNormalPatches`: Patch-name regex list used for boundary-normal correction.
 
 #### `constrainedPoints` entries

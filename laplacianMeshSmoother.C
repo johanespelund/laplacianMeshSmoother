@@ -531,11 +531,12 @@ int main(int argc, char *argv[]) {
     mesh.movePoints(newPoints);
 
     //
-    // Adjust the points on the patches to be orthogonal to the internal points
+    // Adjust connected internal points so boundary cells become orthogonal
     if (boundaryNormalFreq > 0 and (iter + 1) % boundaryNormalFreq == 0) {
-      Info << "\nAdjusting boundary points to be orthogonal to internal "
-              "points..."
+      Info << "\nAdjusting internal points to keep boundary points orthogonal..."
            << endl;
+      vectorField internalOrthAdjustment(mesh.nPoints(), vector::zero);
+      labelList internalOrthAdjustmentCount(mesh.nPoints(), 0);
       // Info << "Adjusting boundary points to be orthogonal to internal
       // points." << endl;
       forAllConstIter(labelHashSet, boundaryNormalPatchesSet, iter) {
@@ -596,8 +597,11 @@ int main(int argc, char *argv[]) {
               const vector &faceNormal = pp.faceNormals()[facei];
               boundaryNormal += faceNormal;
             }
-            // boundaryNormal.normalise();
-            boundaryNormal /= mag(boundaryNormal);
+            const scalar normalMag = mag(boundaryNormal);
+            if (normalMag < SMALL) {
+              continue;
+            }
+            boundaryNormal /= normalMag;
 
             // For now, assumes that the desired normal is (0,-1,0)
             /* vector boundaryNormal = vector(0, -1, 0); */
@@ -610,8 +614,16 @@ int main(int argc, char *argv[]) {
              * dot(internalToBoundary, boundaryNormal) * boundaryNormal; */
 
             /* mesh.points()[meshPointi] = newPoint; */
-            newPoints[meshPointi] = mesh.points()[meshPointi] - movement;
+            internalOrthAdjustment[internalPointi] += movement;
+            internalOrthAdjustmentCount[internalPointi]++;
           }
+        }
+      }
+      forAll(internalOrthAdjustmentCount, pointI) {
+        if (internalOrthAdjustmentCount[pointI] > 0) {
+          newPoints[pointI] =
+              mesh.points()[pointI] +
+              internalOrthAdjustment[pointI] / internalOrthAdjustmentCount[pointI];
         }
       }
     }
