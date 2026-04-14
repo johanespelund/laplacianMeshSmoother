@@ -533,7 +533,7 @@ int main(int argc, char *argv[]) {
     //
     // Adjust connected internal points so boundary cells become orthogonal
     if (boundaryNormalFreq > 0 and (iter + 1) % boundaryNormalFreq == 0) {
-      Info << "\nAdjusting internal points to keep boundary points orthogonal..."
+      Info << "\nAdjusting internal points to keep boundary points orthogonal."
            << endl;
       vectorField internalOrthAdjustment(mesh.nPoints(), vector::zero);
       labelList internalOrthAdjustmentCount(mesh.nPoints(), 0);
