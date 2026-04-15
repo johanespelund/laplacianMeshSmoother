@@ -396,7 +396,7 @@ int main(int argc, char *argv[]) {
       vector axisDir = wpp.axis();
       if (mag(axisDir) > SMALL) {
         axisDir /= mag(axisDir);
-        if (mag(axisDir & wedgeAxisDir) < (1 - SMALL)) {
+        if (mag(mag(axisDir & wedgeAxisDir) - scalar(1)) > SMALL) {
           consistentWedgeAxis = false;
           break;
         }
