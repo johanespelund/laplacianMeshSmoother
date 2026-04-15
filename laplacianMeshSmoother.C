@@ -584,21 +584,7 @@ int main(int argc, char *argv[]) {
 
         if (pointsOnWedgeAxis[pointI] && !hasUserConstraint &&
             mag(wedgeAxisDir) > SMALL) {
-          label internalPointi = -1;
-          for (const label nbrPointi : pointNeighbours[pointI]) {
-            if (patchCount[nbrPointi] == 0) {
-              internalPointi = nbrPointi;
-              break;
-            }
-          }
-
-          if (internalPointi >= 0) {
-            const point candidatePoint = mesh.points()[pointI] + movement;
-            const vector rel = candidatePoint - mesh.points()[internalPointi];
-            const vector relOrtho = rel - (rel & wedgeAxisDir) * wedgeAxisDir;
-            const point correctedPoint = mesh.points()[internalPointi] + relOrtho;
-            movement = correctedPoint - mesh.points()[pointI];
-          }
+          movement = (movement & wedgeAxisDir) * wedgeAxisDir;
         }
 
         movedPoints++;
