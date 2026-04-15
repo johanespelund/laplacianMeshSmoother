@@ -405,7 +405,7 @@ int main(int argc, char *argv[]) {
     if (!consistentWedgeAxis) {
       WarningInFunction
           << "Wedge patches have inconsistent axis directions. "
-          << "Disabling wedge-axis orthogonality correction." << endl;
+          << "Disabling wedge-axis movement restriction." << endl;
       wedgeAxisDir = vector::zero;
     }
 
@@ -426,8 +426,8 @@ int main(int argc, char *argv[]) {
       }
     }
 
-    Info << "Applying wedge-axis orthogonality adjustment on " << nAxisPoints
-         << " wedge-axis points." << endl;
+    Info << "Restricting " << nAxisPoints
+         << " wedge-axis points to wedge-direction movement." << endl;
   }
 
   pointField newPoints(mesh.points().size());
