@@ -517,6 +517,10 @@ int main(int argc, char *argv[]) {
               isAlreadyConstrained = true;
               movedPoints--;
             }
+
+            // TODO:
+            //   For wegde meshes, do not move points that are neighbour to the wedge axis!
+
           }
         }
         movedPoints++;
