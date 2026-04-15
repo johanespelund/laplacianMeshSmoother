@@ -336,6 +336,7 @@ int main(int argc, char *argv[]) {
 
   PackedBoolList vertOnPatch(mesh.nPoints());
   PackedBoolList vertOnExcludePatch(mesh.nPoints());
+  PackedBoolList pointsNearWedgeAxis(mesh.nPoints());
   labelList wedgePatches;
 
   List<vector> nWedge;
@@ -347,9 +348,12 @@ int main(int argc, char *argv[]) {
         mesh.boundaryMesh()[patchi].type() == "empty" ||
         mesh.boundaryMesh()[patchi].type() == "cyclic") {
       if (mesh.boundaryMesh()[patchi].type() == "wedge") {
+        const wedgePolyPatch &wpp =
+            refCast<const wedgePolyPatch>(mesh.boundaryMesh()[patchi]);
+        Info << "Found wedge patch " << mesh.boundaryMesh()[patchi].name()
+             << " with axis " << wpp.axis() << endl;
         wedgePatches.append(patchi);
-        nWedge.append(
-            refCast<const wedgePolyPatch>(mesh.boundaryMesh()[patchi]).n());
+        nWedge.append(wpp.n());
       }
       continue;
     }
@@ -369,6 +373,36 @@ int main(int argc, char *argv[]) {
   List<labelList> pointNeighbours(mesh.nPoints());
   forAll(pointNeighbours, pointI) {
     pointNeighbours[pointI] = findNeighboringPoints(mesh, pointI);
+  }
+
+  if (wedgePatches.size() > 1) {
+    labelList wedgePointCount(mesh.nPoints(), 0);
+    forAll(wedgePatches, wpi) {
+      const wedgePolyPatch &wpp =
+          refCast<const wedgePolyPatch>(mesh.boundaryMesh()[wedgePatches[wpi]]);
+      for (const label pointi : wpp.meshPoints()) {
+        wedgePointCount[pointi]++;
+      }
+    }
+
+    label nAxisPoints = 0;
+    label nAxisNeighbourPoints = 0;
+    forAll(wedgePointCount, pointi) {
+      if (wedgePointCount[pointi] > 1) {
+        nAxisPoints++;
+        pointsNearWedgeAxis.set(pointi);
+
+        for (const label nbrPointi : pointNeighbours[pointi]) {
+          if (!pointsNearWedgeAxis[nbrPointi]) {
+            nAxisNeighbourPoints++;
+          }
+          pointsNearWedgeAxis.set(nbrPointi);
+        }
+      }
+    }
+
+    Info << "Keeping " << nAxisPoints << " wedge-axis points and "
+         << nAxisNeighbourPoints << " neighbouring points fixed." << endl;
   }
 
   pointField newPoints(mesh.points().size());
@@ -403,7 +437,7 @@ int main(int argc, char *argv[]) {
       }
       movedPoints++;
       constraintCount++;
-      if (pointsInMultiplePatches[pointI])
+      if (pointsInMultiplePatches[pointI] || pointsNearWedgeAxis[pointI])
       {
         movement = vector(0, 0, 0);
         movedPoints--;
@@ -517,9 +551,6 @@ int main(int argc, char *argv[]) {
               isAlreadyConstrained = true;
               movedPoints--;
             }
-
-            // TODO:
-            //   For wegde meshes, do not move points that are neighbour to the wedge axis!
 
           }
         }
