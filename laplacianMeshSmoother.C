@@ -336,7 +336,8 @@ int main(int argc, char *argv[]) {
 
   PackedBoolList vertOnPatch(mesh.nPoints());
   PackedBoolList vertOnExcludePatch(mesh.nPoints());
-  PackedBoolList pointsNearWedgeAxis(mesh.nPoints());
+  PackedBoolList pointsOnWedgeAxis(mesh.nPoints());
+  vector wedgeAxisDir(vector::zero);
   labelList wedgePatches;
 
   List<vector> nWedge;
@@ -376,6 +377,11 @@ int main(int argc, char *argv[]) {
   }
 
   if (wedgePatches.size() > 1) {
+    const wedgePolyPatch &wpp0 =
+        refCast<const wedgePolyPatch>(mesh.boundaryMesh()[wedgePatches[0]]);
+    wedgeAxisDir = wpp0.axis();
+    wedgeAxisDir /= mag(wedgeAxisDir);
+
     labelList wedgePointCount(mesh.nPoints(), 0);
     forAll(wedgePatches, wpi) {
       const wedgePolyPatch &wpp =
@@ -386,23 +392,15 @@ int main(int argc, char *argv[]) {
     }
 
     label nAxisPoints = 0;
-    label nAxisNeighbourPoints = 0;
     forAll(wedgePointCount, pointi) {
       if (wedgePointCount[pointi] > 1) {
         nAxisPoints++;
-        pointsNearWedgeAxis.set(pointi);
-
-        for (const label nbrPointi : pointNeighbours[pointi]) {
-          if (!pointsNearWedgeAxis[nbrPointi]) {
-            nAxisNeighbourPoints++;
-          }
-          pointsNearWedgeAxis.set(nbrPointi);
-        }
+        pointsOnWedgeAxis.set(pointi);
       }
     }
 
-    Info << "Keeping " << nAxisPoints << " wedge-axis points and "
-         << nAxisNeighbourPoints << " neighbouring points fixed." << endl;
+    Info << "Applying wedge-axis orthogonality adjustment on " << nAxisPoints
+         << " wedge-axis points." << endl;
   }
 
   pointField newPoints(mesh.points().size());
@@ -437,15 +435,17 @@ int main(int argc, char *argv[]) {
       }
       movedPoints++;
       constraintCount++;
-      if (pointsInMultiplePatches[pointI] || pointsNearWedgeAxis[pointI])
+      if (pointsInMultiplePatches[pointI] && !pointsOnWedgeAxis[pointI])
       {
         movement = vector(0, 0, 0);
         movedPoints--;
         constraintCount++;
       } else {
         bool isAlreadyConstrained = false;
+        bool hasUserConstraint = false;
         forAll(constrainedNames, i) {
           if (constrainedPointSets[i]->found(pointI)) {
+            hasUserConstraint = true;
             constraintCount++;
             if (constraintTypes[i] == "yconst") {
               movement.y() = constraintValues[i] - mesh.points()[pointI].y();
@@ -554,6 +554,25 @@ int main(int argc, char *argv[]) {
 
           }
         }
+
+        if (pointsOnWedgeAxis[pointI] && !hasUserConstraint) {
+          label internalPointi = -1;
+          for (const label nbrPointi : pointNeighbours[pointI]) {
+            if (patchCount[nbrPointi] == 0) {
+              internalPointi = nbrPointi;
+              break;
+            }
+          }
+
+          if (internalPointi >= 0) {
+            const point candidatePoint = mesh.points()[pointI] + movement;
+            const vector rel = candidatePoint - mesh.points()[internalPointi];
+            const vector relOrtho = rel - (rel & wedgeAxisDir) * wedgeAxisDir;
+            const point correctedPoint = mesh.points()[internalPointi] + relOrtho;
+            movement = correctedPoint - mesh.points()[pointI];
+          }
+        }
+
         movedPoints++;
       }
 
