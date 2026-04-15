@@ -376,11 +376,15 @@ int main(int argc, char *argv[]) {
     pointNeighbours[pointI] = findNeighboringPoints(mesh, pointI);
   }
 
-  if (wedgePatches.size() > 1) {
+  if (wedgePatches.size() > 0) {
     const wedgePolyPatch &wpp0 =
         refCast<const wedgePolyPatch>(mesh.boundaryMesh()[wedgePatches[0]]);
     wedgeAxisDir = wpp0.axis();
-    wedgeAxisDir /= mag(wedgeAxisDir);
+    if (mag(wedgeAxisDir) > SMALL) {
+      wedgeAxisDir /= mag(wedgeAxisDir);
+    } else {
+      wedgeAxisDir = vector::zero;
+    }
 
     labelList wedgePointCount(mesh.nPoints(), 0);
     forAll(wedgePatches, wpi) {
@@ -555,7 +559,8 @@ int main(int argc, char *argv[]) {
           }
         }
 
-        if (pointsOnWedgeAxis[pointI] && !hasUserConstraint) {
+        if (pointsOnWedgeAxis[pointI] && !hasUserConstraint &&
+            mag(wedgeAxisDir) > SMALL) {
           label internalPointi = -1;
           for (const label nbrPointi : pointNeighbours[pointI]) {
             if (patchCount[nbrPointi] == 0) {
