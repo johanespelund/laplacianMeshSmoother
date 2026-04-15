@@ -386,6 +386,29 @@ int main(int argc, char *argv[]) {
       wedgeAxisDir = vector::zero;
     }
 
+    bool consistentWedgeAxis = true;
+    forAll(wedgePatches, wpi) {
+      if (wpi == 0) {
+        continue;
+      }
+      const wedgePolyPatch &wpp =
+          refCast<const wedgePolyPatch>(mesh.boundaryMesh()[wedgePatches[wpi]]);
+      vector axisDir = wpp.axis();
+      if (mag(axisDir) > SMALL) {
+        axisDir /= mag(axisDir);
+        if (mag(axisDir & wedgeAxisDir) < (1 - SMALL)) {
+          consistentWedgeAxis = false;
+          break;
+        }
+      }
+    }
+    if (!consistentWedgeAxis) {
+      WarningInFunction
+          << "Wedge patches have inconsistent axis directions. "
+          << "Disabling wedge-axis orthogonality correction." << endl;
+      wedgeAxisDir = vector::zero;
+    }
+
     labelList wedgePointCount(mesh.nPoints(), 0);
     forAll(wedgePatches, wpi) {
       const wedgePolyPatch &wpp =
